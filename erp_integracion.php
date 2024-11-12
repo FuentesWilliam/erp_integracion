@@ -55,7 +55,10 @@ class ERP_integracion extends Module
 
     public function install()
     {
-        //Configuration::updateValue('ERP_INTEGRACION_LIVE_MODE', false);
+        // Ejemplo de configuración durante la instalación del módulo
+        Configuration::updateValue('ERP_MANAGER_RUT', '92379000-4');
+        Configuration::updateValue('ERP_MANAGER_TOKEN', '3OIxJ644QBgB69AQk3r8uxha_Ma9__375CVsDC8_j_JU57__DM');
+        Configuration::updateValue('ERP_MANAGER_ENDPOINT', 'https://api.manager.cl/sec/prod/carrocompras.asmx/');
 
         return parent::install();
             // &&
