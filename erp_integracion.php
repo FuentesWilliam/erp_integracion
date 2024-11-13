@@ -30,8 +30,6 @@ if (!defined('_PS_VERSION_')) {
 
 class ERP_integracion extends Module
 {
-    //protected $config_form = false;
-
     public function __construct()
     {
         $this->name = 'erp_integracion';
@@ -46,7 +44,7 @@ class ERP_integracion extends Module
         $this->displayName = $this->l('Integración ERP Manager');
         $this->description = $this->l('Módulo para sincronización de stock, precios, clientes y pedidos con ERP.');
 
-        $this->confirmUninstall = $this->l('');
+        $this->confirmUninstall = $this->l('¿Está seguro de que desea desinstalar este módulo?');
         $this->ps_versions_compliancy = array(
             'min' => '1.7',
             'max' => _PS_VERSION_
@@ -55,20 +53,20 @@ class ERP_integracion extends Module
 
     public function install()
     {
-        // Ejemplo de configuración durante la instalación del módulo
+        // Configuración inicial durante la instalación
         Configuration::updateValue('ERP_MANAGER_RUT', '92379000-4');
         Configuration::updateValue('ERP_MANAGER_TOKEN', '3OIxJ644QBgB69AQk3r8uxha_Ma9__375CVsDC8_j_JU57__DM');
         Configuration::updateValue('ERP_MANAGER_ENDPOINT', 'https://api.manager.cl/sec/prod/carrocompras.asmx/');
 
-        return parent::install();
-            // &&
-            //$this->registerHook('header') &&
-            //$this->registerHook('displayBackOfficeHeader');
+        return parent::install() &&
+            $this->registerHook('displayBackOfficeHeader');
     }
 
     public function uninstall()
     {
-        //Configuration::deleteByName('ERP_INTEGRACION_LIVE_MODE');
+        Configuration::deleteByName('ERP_MANAGER_RUT');
+        Configuration::deleteByName('ERP_MANAGER_TOKEN');
+        Configuration::deleteByName('ERP_MANAGER_ENDPOINT');
 
         return parent::uninstall();
     }
@@ -76,143 +74,141 @@ class ERP_integracion extends Module
     /**
      * Load the configuration form
      */
-    // public function getContent()
-    // {
-    //     /**
-    //      * If values have been submitted in the form, process.
-    //      */
-    //     if (((bool)Tools::isSubmit('submitERP_integracionModule')) == true) {
-    //         $this->postProcess();
-    //     }
+    public function getContent()
+    {
+        if (((bool)Tools::isSubmit('submitERP_integracionModule')) == true) {
+            $this->postProcess();
+        }
 
-    //     $this->context->smarty->assign('module_dir', $this->_path);
+       // Cargar los valores actuales de configuración para asignarlos a Smarty
+        $fields_value = $this->getConfigFormValues();
 
-    //     $output = $this->context->smarty->fetch($this->local_path.'views/templates/admin/configure.tpl');
+        // Generar URLs para cada acción del controlador AdminSync
+        $syncStockUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncStock';
+        $syncPricesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncPrices';
+        $syncSalesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncSales';
 
-    //     return $output;
-    // }
+
+        // Asignar URLs y otros valores a Smarty
+        $this->context->smarty->assign([
+            'module' => $this,
+            'fields_value', $fields_value,
+            'sync_stock_url' => $syncStockUrl,
+            'sync_prices_url' => $syncPricesUrl,
+            'sync_sales_url' => $syncSalesUrl,
+        ]);
+
+        // Cargar la plantilla de navegación
+        $navigation = $this->context->smarty->fetch(
+            $this->local_path . 'views/templates/admin/navigation.tpl');
+
+        return $navigation . $this->renderForm();
+    }
 
     /**
      * Create the form that will be displayed in the configuration of your module.
      */
-    // protected function renderForm()
-    // {
-    //     $helper = new HelperForm();
+    protected function renderForm()
+    {
+        $helper = new HelperForm();
 
-    //     $helper->show_toolbar = false;
-    //     $helper->table = $this->table;
-    //     $helper->module = $this;
-    //     $helper->default_form_language = $this->context->language->id;
-    //     $helper->allow_employee_form_lang = Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
+        $helper->show_toolbar = false;
+        $helper->table = $this->table;
+        $helper->module = $this;
+        $helper->default_form_language = $this->context->language->id;
+        $helper->allow_employee_form_lang = Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
 
-    //     $helper->identifier = $this->identifier;
-    //     $helper->submit_action = 'submitERP_integracionModule';
-    //     $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false)
-    //         .'&configure='.$this->name.'&tab_module='.$this->tab.'&module_name='.$this->name;
-    //     $helper->token = Tools::getAdminTokenLite('AdminModules');
+        $helper->identifier = $this->identifier;
+        $helper->submit_action = 'submitERP_integracionModule';
+        $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false)
+            .'&configure='.$this->name.'&tab_module='.$this->tab.'&module_name='.$this->name;
+        $helper->token = Tools::getAdminTokenLite('AdminModules');
 
-    //     $helper->tpl_vars = array(
-    //         'fields_value' => $this->getConfigFormValues(), /* Add values for your inputs */
-    //         'languages' => $this->context->controller->getLanguages(),
-    //         'id_language' => $this->context->language->id,
-    //     );
+        $helper->tpl_vars = array(
+            'fields_value' => $this->getConfigFormValues(), /* Add values for your inputs */
+            'languages' => $this->context->controller->getLanguages(),
+            'id_language' => $this->context->language->id,
+        );
 
-    //     return $helper->generateForm(array($this->getConfigForm()));
-    //}
+        return $helper->generateForm(array($this->getConfigForm()));
+    }
 
     /**
      * Create the structure of your form.
      */
-    // protected function getConfigForm()
-    // {
-    //     return array(
-    //         'form' => array(
-    //             'legend' => array(
-    //             'title' => $this->l('Settings'),
-    //             'icon' => 'icon-cogs',
-    //             ),
-    //             'input' => array(
-    //                 array(
-    //                     'type' => 'switch',
-    //                     'label' => $this->l('Live mode'),
-    //                     'name' => 'ERP_INTEGRACION_LIVE_MODE',
-    //                     'is_bool' => true,
-    //                     'desc' => $this->l('Use this module in live mode'),
-    //                     'values' => array(
-    //                         array(
-    //                             'id' => 'active_on',
-    //                             'value' => true,
-    //                             'label' => $this->l('Enabled')
-    //                         ),
-    //                         array(
-    //                             'id' => 'active_off',
-    //                             'value' => false,
-    //                             'label' => $this->l('Disabled')
-    //                         )
-    //                     ),
-    //                 ),
-    //                 array(
-    //                     'col' => 3,
-    //                     'type' => 'text',
-    //                     'prefix' => '<i class="icon icon-envelope"></i>',
-    //                     'desc' => $this->l('Enter a valid email address'),
-    //                     'name' => 'ERP_INTEGRACION_ACCOUNT_EMAIL',
-    //                     'label' => $this->l('Email'),
-    //                 ),
-    //                 array(
-    //                     'type' => 'password',
-    //                     'name' => 'ERP_INTEGRACION_ACCOUNT_PASSWORD',
-    //                     'label' => $this->l('Password'),
-    //                 ),
-    //             ),
-    //             'submit' => array(
-    //                 'title' => $this->l('Save'),
-    //             ),
-    //         ),
-    //     );
-    // }
+    protected function getConfigForm()
+    {
+        return array(
+            'form' => array(
+                'legend' => array(
+                'title' => $this->l('Configuración del ERP Manager'),
+                'icon' => 'icon-cogs',
+                ),
+                'input' => array(
+                    array(
+                        'col' => 3,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-user"></i>',
+                        'desc' => $this->l('Introduzca un RUT válido'),
+                        'name' => 'ERP_MANAGER_RUT',
+                        'label' => $this->l('Rut Empresa'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-key"></i>',
+                        'desc' => $this->l('Introduzca un token válido'),
+                        'name' => 'ERP_MANAGER_TOKEN',
+                        'label' => $this->l('Token'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-link"></i>',
+                        'desc' => $this->l('Introduzca una URL válida'),
+                        'name' => 'ERP_MANAGER_ENDPOINT',
+                        'label' => $this->l('ERP'),
+                    ),
+                ),
+                'submit' => array(
+                    'title' => $this->l('Guardar'),
+                ),
+            ),
+        );
+    }
 
     /**
      * Set values for the inputs.
      */
-    // protected function getConfigFormValues()
-    // {
-    //     return array(
-    //         'ERP_INTEGRACION_LIVE_MODE' => Configuration::get('ERP_INTEGRACION_LIVE_MODE', true),
-    //         'ERP_INTEGRACION_ACCOUNT_EMAIL' => Configuration::get('ERP_INTEGRACION_ACCOUNT_EMAIL', 'contact@prestashop.com'),
-    //         'ERP_INTEGRACION_ACCOUNT_PASSWORD' => Configuration::get('ERP_INTEGRACION_ACCOUNT_PASSWORD', null),
-    //     );
-    // }
+    protected function getConfigFormValues()
+    {
+        return array(
+            'ERP_MANAGER_RUT' => Configuration::get('ERP_MANAGER_RUT', ''),
+            'ERP_MANAGER_TOKEN' => Configuration::get('ERP_MANAGER_TOKEN', ''),
+            'ERP_MANAGER_ENDPOINT' => Configuration::get('ERP_MANAGER_ENDPOINT', ''),
+        );
+    }
 
     /**
      * Save form data.
      */
-    // protected function postProcess()
-    // {
-    //     $form_values = $this->getConfigFormValues();
+    protected function postProcess()
+    {
+        $form_values = $this->getConfigFormValues();
 
-    //     foreach (array_keys($form_values) as $key) {
-    //         Configuration::updateValue($key, Tools::getValue($key));
-    //     }
-    // }
-
-    /**
-    * Add the CSS & JavaScript files you want to be loaded in the BO.
-    */
-    // public function hookDisplayBackOfficeHeader()
-    // {
-    //     if (Tools::getValue('configure') == $this->name) {
-    //         $this->context->controller->addJS($this->_path.'views/js/back.js');
-    //         $this->context->controller->addCSS($this->_path.'views/css/back.css');
-    //     }
-    // }
+        foreach (array_keys($form_values) as $key) {
+            Configuration::updateValue($key, Tools::getValue($key));
+        }
+    }
 
     /**
-     * Add the CSS & JavaScript files you want to be added on the FO.
+     * Añadir los archivos CSS y JavaScript en el Back Office.
      */
-    // public function hookHeader()
-    // {
-    //     $this->context->controller->addJS($this->_path.'/views/js/front.js');
-    //     $this->context->controller->addCSS($this->_path.'/views/css/front.css');
-    // }
+    public function hookDisplayBackOfficeHeader()
+    {   
+        // Solo carga el CSS si estás en la configuración del módulo
+        if (Tools::getValue('configure') == $this->name) {
+            $this->context->controller->addCSS($this->_path.'views/css/back.css');
+        }
+    }
 }

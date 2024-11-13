@@ -24,4 +24,62 @@
 *
 * Don't forget to prefix your containers with your own identifier
 * to avoid any conflicts with others containers.
+* 
+* 
 */
+
+document.addEventListener("DOMContentLoaded", function () {
+    console.log("listo");
+    var currentPage = 1;
+    var itemsPerPage = 100;
+
+    function loadPage(page) {
+        document.getElementById('stock-loading').style.display = 'block';
+
+        // Modificar fetch para agregar correctamente los parámetros
+        fetch(`${ajax_stock_pagination_url}&page=${page}&itemsPerPage=${itemsPerPage}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('stock-loading').style.display = 'none';
+                
+                if (data.status === 'success') {
+                    var stockContainer = document.getElementById('stock-data');
+                    stockContainer.style.display = 'block';
+
+                    var stockHTML = '<table class="table">';
+                    stockHTML += '<thead><tr><th>Producto</th><th>Stock</th><th>Prestashop Stock</th><th>Encontrado</th></tr></thead><tbody>';
+                    
+                    data.data.forEach(stockItem => {
+                        stockHTML += `<tr><td>${stockItem.reference}</td>`;
+                        stockHTML += `<td>${stockItem.stock}</td>`;
+                        stockHTML += `<td>${stockItem.prestashop_stock}</td>`;
+                        stockHTML += `<td>${stockItem.estado ? "<i class='icon-circle-blank'></i>" : "<i class='icon-remove'></i>"}</td></tr>`;
+                    });
+
+                    stockHTML += '</tbody></table>';
+                    stockContainer.innerHTML = stockHTML;
+
+                    document.getElementById('page-info').innerText = 'Página ' + data.page + ' de ' + data.totalPages;
+                    currentPage = data.page;
+
+                    document.getElementById('prev-page').disabled = (currentPage <= 1);
+                    document.getElementById('next-page').disabled = (currentPage >= data.totalPages);
+                }
+            })
+            .catch(error => {
+                document.getElementById('stock-loading').innerHTML = '<div class="alert alert-danger">Error al cargar los datos de stock.</div>';
+            });
+    }
+
+    document.getElementById('next-page').addEventListener('click', function () {
+        loadPage(currentPage + 1);
+    });
+
+    document.getElementById('prev-page').addEventListener('click', function () {
+        if (currentPage > 1) {
+            loadPage(currentPage - 1);
+        }
+    });
+
+    loadPage(1);
+});

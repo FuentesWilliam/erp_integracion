@@ -9,15 +9,26 @@ abstract class ErpSyncBase
     public function __construct()
     {
         // Configuración obtenida desde la base de datos
-        $rutEmpresa = Configuration::get('ERP_MANAGER_RUT');
-        $erpToken = Configuration::get('ERP_MANAGER_TOKEN');
-        $erpUrl = Configuration::get('ERP_MANAGER_ENDPOINT');
+        $this->rutEmpresa = Configuration::get('ERP_MANAGER_RUT');
+        $this->erpToken = Configuration::get('ERP_MANAGER_TOKEN');
+        $this->erpEndpoint = Configuration::get('ERP_MANAGER_ENDPOINT');
+
+        // Validar que las configuraciones estén presentes
+        if (empty($this->rutEmpresa) || empty($this->erpToken) || empty($this->erpEndpoint)) {
+            $this->logMessage("Error: Faltan configuraciones necesarias para el ERP.");
+            throw new Exception("Configuraciones de ERP incompletas.");
+        }
     }
 
     // Método para escribir en el log
-    protected function logMessage($message)
+    protected function logMessage($message, $log_file = 'sync_log.txt')
     {
-        $logFile = _PS_MODULE_DIR_ . 'mymodule/logs/sync_log.txt';
+        $logDir = _PS_MODULE_DIR_ . 'erp_integracion/logs/';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+        
+        $logFile = $logDir . $log_file;
         $date = new DateTime();
         file_put_contents($logFile, $date->format('Y-m-d H:i:s') . " - " . $message . "\n", FILE_APPEND);
     }
@@ -47,17 +58,22 @@ abstract class ErpSyncBase
     // Método común para obtener datos de un endpoint específico del ERP
     protected function fetchErpData($endpointName, $additionalParams = "")
     {
-        // Construimos la URL del endpoint
-        $erpUrlMethod = $this->$erpUrl . $endpointName;  
+        try {
+            // Construimos la URL del endpoint
+            $erpUrlMethod = $this->erpEndpoint . $endpointName;  
 
-        $url = "{$erpUrlMethod}?rutEmpresa={$this->rutEmpresa}&token={$this->erpToken}{$additionalParams}";
+            $url = "{$erpUrlMethod}?rutEmpresa={$this->rutEmpresa}&token={$this->erpToken}{$additionalParams}";
 
-        $response = @file_get_contents($url);
-        if ($response === false) {
-            $this->logMessage("Error al conectarse al endpoint del ERP.");
+            $response = @file_get_contents($url);
+            if ($response === false) {
+                $this->logMessage("Error al conectarse al endpoint del ERP.");
+                return false;
+            }
+
+            return $this->cleanXmlData($response);
+        } catch (Exception $e) {
+            $this->logMessage("Excepción en fetchErpData: " . $e->getMessage());
             return false;
         }
-
-        return $this->cleanXmlData($response);
     }
 }

@@ -1,4 +1,4 @@
-/**
+{*
 * 2007-2024 PrestaShop
 *
 * NOTICE OF LICENSE
@@ -21,13 +21,25 @@
 *  @copyright 2007-2024 PrestaShop SA
 *  @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *  International Registered Trademark & Property of PrestaShop SA
-*
-* Don't forget to prefix your containers with your own identifier
-* to avoid any conflicts with others containers.
-*/
+*}
 
-
-.nav-pills {
-    display: flex;
-    justify-content: center;
-}
+<div class="panel">
+    <h3>{l s='ERP Integración - Menú de Sincronización' mod='erp_integracion'}</h3>
+    <ul class="nav nav-pills">
+        <li>
+            <a href="{$sync_stock_url}" class="btn btn-default">
+                {l s='Sincronizar Stock' mod='erp_integracion'}
+            </a>
+        </li>
+        <li>
+            <a href="{$sync_prices_url}" class="btn btn-default">
+                {l s='Sincronizar Precios' mod='erp_integracion'}
+            </a>
+        </li>
+        <li>
+            <a href="{$sync_sales_url}" class="btn btn-default">
+                {l s='Sincronizar Ventas' mod='erp_integracion'}
+            </a>
+        </li>
+    </ul>
+</div>
