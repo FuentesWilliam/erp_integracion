@@ -84,8 +84,9 @@ class ERP_integracion extends Module
         $fields_value = $this->getConfigFormValues();
 
         // Generar URLs para cada acción del controlador AdminSync
-        $syncStockUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncStock';
-        $syncPricesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncPrices';
+        // $syncStockUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncStock';
+        // $syncPricesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncPrices';
+        $syncInventoryUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncInventory';
         $syncSalesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncSales';
 
 
@@ -93,8 +94,7 @@ class ERP_integracion extends Module
         $this->context->smarty->assign([
             'module' => $this,
             'fields_value', $fields_value,
-            'sync_stock_url' => $syncStockUrl,
-            'sync_prices_url' => $syncPricesUrl,
+            'sync_inventory_url' => $syncInventoryUrl,
             'sync_sales_url' => $syncSalesUrl,
         ]);
 

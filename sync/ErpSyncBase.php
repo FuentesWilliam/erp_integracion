@@ -66,7 +66,7 @@ abstract class ErpSyncBase
 
             $response = @file_get_contents($url);
             if ($response === false) {
-                $this->logMessage("Error al conectarse al endpoint del ERP.", 'sync_error.txt');
+                $this->logMessage("Error al conectarse al endpoint '$endpointName' del ERP.", 'sync_error.txt');
                 return false;
             }
 

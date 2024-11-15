@@ -27,13 +27,8 @@
     <h3>{l s='ERP Integración - Menú de Sincronización' mod='erp_integracion'}</h3>
     <ul class="nav nav-pills">
         <li>
-            <a href="{$sync_stock_url}" class="btn btn-default">
-                {l s='Sincronizar Stock' mod='erp_integracion'}
-            </a>
-        </li>
-        <li>
-            <a href="{$sync_prices_url}" class="btn btn-default">
-                {l s='Sincronizar Precios' mod='erp_integracion'}
+            <a href="{$sync_inventory_url}" class="btn btn-default">
+                {l s='Sincronizar Inventario' mod='erp_integracion'}
             </a>
         </li>
         <li>
