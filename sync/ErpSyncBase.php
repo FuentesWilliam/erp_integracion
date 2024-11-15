@@ -21,7 +21,7 @@ abstract class ErpSyncBase
     }
 
     // Método para escribir en el log
-    protected function logMessage($message, $log_file = 'sync_log.txt')
+    public function logMessage($message, $log_file = 'sync_succes.txt')
     {
         $logDir = _PS_MODULE_DIR_ . 'erp_integracion/logs/';
         if (!is_dir($logDir)) {
@@ -38,7 +38,7 @@ abstract class ErpSyncBase
     {
         $lines = explode("\n", $response);
         if (!isset($lines[5])) {
-            $this->logMessage("Error: La línea 5 no existe en la respuesta del ERP.");
+            $this->logMessage("Error: La línea 5 no existe en la respuesta del ERP.", 'sync_error.txt');
             return false;
         }
 
@@ -48,7 +48,7 @@ abstract class ErpSyncBase
         $decodedXml = preg_replace('/[\x00-\x1F\x7F]/', '', $decodedXml);
 
         if (empty($decodedXml)) {
-            $this->logMessage("Error: El contenido XML está vacío después de la limpieza.");
+            $this->logMessage("Error: El contenido XML está vacío después de la limpieza.", 'sync_error.txt');
             return false;
         }
 
@@ -66,13 +66,13 @@ abstract class ErpSyncBase
 
             $response = @file_get_contents($url);
             if ($response === false) {
-                $this->logMessage("Error al conectarse al endpoint del ERP.");
+                $this->logMessage("Error al conectarse al endpoint del ERP.", 'sync_error.txt');
                 return false;
             }
 
             return $this->cleanXmlData($response);
         } catch (Exception $e) {
-            $this->logMessage("Excepción en fetchErpData: " . $e->getMessage());
+            $this->logMessage("Excepción en fetchErpData: " . $e->getMessage(), 'sync_error.txt');
             return false;
         }
     }

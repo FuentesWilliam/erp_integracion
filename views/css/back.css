@@ -31,3 +31,23 @@
     display: flex;
     justify-content: center;
 }
+
+/* Estilo para el botón redondo */
+.btn-circle {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 50px; /* Ajusta el tamaño del botón */
+    height: 50px; /* Ajusta el tamaño del botón */
+    border-radius: 50%; /* Hace el botón redondo */
+    background-color: #007bff; /* Color de fondo del botón */
+    color: white; /* Color del ícono */
+    text-decoration: none;
+    font-size: 20px; /* Ajusta el tamaño del ícono */
+    transition: background-color 0.3s ease; /* Efecto de transición al pasar el ratón */
+}
+
+.btn-circle:hover {
+    background-color: #0056b3; /* Color de fondo al pasar el ratón */
+}
+

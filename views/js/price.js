@@ -37,35 +37,37 @@ document.addEventListener("DOMContentLoaded", function () {
 
         console.log(page);
         
-        document.getElementById('stock-loading').style.display = 'block';
+        document.getElementById('price-loading').style.display = 'block';
 
-        fetch(`${ajax_stock_pagination_url}&page=${page}&itemsPerPage=${itemsPerPage}`)
+        fetch(`${ajax_price_pagination_url}&page=${page}&itemsPerPage=${itemsPerPage}`)
             .then(response => response.json())
             .then(data => {
-                document.getElementById('stock-loading').style.display = 'none';
+                document.getElementById('price-loading').style.display = 'none';
 
                 if (data.status === 'success') {
-                    var stockContainer = document.getElementById('stock-data');
-                    stockContainer.style.display = 'block';
+                    var priceContainer = document.getElementById('price-data');
+                    priceContainer.style.display = 'block';
 
-                    var stockHTML = '<table class="table">';
-                    stockHTML += '<thead><tr>';
-                    stockHTML += '<th>Producto</th>';
-                    stockHTML += '<th>Stock</th>';
-                    stockHTML += '<th>Prestashop Stock</th>';
-                    stockHTML += '</tr></thead>';
-                    stockHTML += '<tbody>';
+                    var priceHTML = '<table class="table">';
+                    priceHTML += '<thead><tr>';
+                    priceHTML += '<th>Producto</th>';
+                    priceHTML += '<th>Código Lista</th>';
+                    priceHTML += '<th>Precio</th>';
+                    priceHTML += '<th>Prestashop Precio</th>';
+                    priceHTML += '</tr></thead>';
+                    priceHTML += '<tbody>';
 
-                    data.data.forEach(stockItem => {
-                        if (stockItem.encontrado === 1) {
-                            stockHTML += `<tr><td>${stockItem.reference}</td>`;
-                            stockHTML += `<td>${stockItem.stock}</td>`;
-                            stockHTML += `<td>${stockItem.prestashop_stock}</td></tr>`;
+                    data.data.forEach(priceItem => {
+                        if (priceItem.encontrado === 1) {
+                            priceHTML += `<tr><td>${priceItem.reference}</td>`;
+                            priceHTML += `<td>${priceItem.codLista}</td>`;
+                            priceHTML += `<td>${priceItem.price}</td>`;
+                            priceHTML += `<td>${priceItem.prestashop_price}</td></tr>`;
                         }
                     });
 
-                    stockHTML += '</tbody></table>';
-                    stockContainer.innerHTML = stockHTML;
+                    priceHTML += '</tbody></table>';
+                    priceContainer.innerHTML = priceHTML;
 
                     // Actualizamos currentPage y totalPages para usarlos globalmente
                     currentPage = data.page;
@@ -77,7 +79,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             })
             .catch(error => {
-                document.getElementById('stock-loading').innerHTML = '<div class="alert alert-danger">Error al cargar los datos de stock.</div>';
+                document.getElementById('price-loading').innerHTML = '<div class="alert alert-danger">Error al cargar los datos de price.</div>';
                 console.error('Error en el fetch:', error);
             });
     }
@@ -100,10 +102,10 @@ document.addEventListener("DOMContentLoaded", function () {
     // Manejar clic en el botón de actualización
     document.getElementById("update-found-products").addEventListener("click", function () {
         // Mostrar mensaje de carga
-        document.getElementById('stock-loading').style.display = 'block';
+        document.getElementById('price-loading').style.display = 'block';
 
         // Realizar solicitud AJAX para actualizar productos
-        fetch(`${ajax_stock_update_url}`, {
+        fetch(`${ajax_price_update_url}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -111,7 +113,7 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .then(response => response.json())
         .then(data => {
-            document.getElementById('stock-loading').style.display = 'none';
+            document.getElementById('price-loading').style.display = 'none';
 
             if (data.status === 'success') {
                 alert("Productos actualizados correctamente: " + data.updated + "no actualizados: " + data.errors);
@@ -120,7 +122,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         })
         .catch(error => {
-            document.getElementById('stock-loading').style.display = 'none';
+            document.getElementById('price-loading').style.display = 'none';
             alert("Error en la actualización de productos.");
             console.error(error);
         });
