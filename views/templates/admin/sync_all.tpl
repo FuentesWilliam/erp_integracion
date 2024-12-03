@@ -1,19 +1,33 @@
 <div class="panel">
     <h3>{l s='ERP Integración - Lista de Stock' mod='erp_integracion'}</h3>
-    <ul class="nav nav-pills">
+    <nav class="navegador">
         <!-- Botón de regreso -->
-        <li><a href="{$main_menu_url}" class="btn-circle" aria-label="{l s='Regresar al menú principal' mod='erp_integracion'}"><i class="process-icon-back"></i></a></li>
+        <a href="{$main_menu_url}" class="btn-circle" aria-label="{l s='Regresar al menú principal' mod='erp_integracion'}"><i class="process-icon-back"></i></a>
+
         <!-- Botones de acción -->
-        <li><button id="" class="btn btn-warning">Actualizar ERP</button></li>
-        <li><button id="update-stock-products" class="btn btn-primary" disabled>Actualizar Stock</button></li>
-        <li><button id="update-price-products" class="btn btn-primary" disabled>Actualizar Precios</button></li>
-    </ul>
+        <button class="btn btn-warning btn-loading" id="update-sync">
+            <span class="button-text">{l s="Actualizar ERP" mod='erp_integracion'}</span>
+            <span class="spinner"></span>
+        </button>
+
+        <button class="btn btn-primary btn-loading" id="update-stock-products" disabled>
+            <span class="button-text">{l s="Actualizar Stock" mod='erp_integracion'}</span>
+            <span class="spinner"></span>
+        </button>
+
+        <button class="btn btn-primary btn-loading" id="update-price-products" disabled>
+            <span class="button-text">{l s="Actualizar Precios" mod='erp_integracion'}</span>
+            <span class="spinner"></span>
+        </button>
+    </nav>
 </div>
 
 <!-- Contenedor de carga -->
-<div id="stock-loading" class="alert alert-info">
-    {l s='Cargando la información de stock, por favor espere...' mod='erp_integracion'}
+<div id="data-loading" class="alert alert-info">
+    {l s='Cargando la información, por favor espere...' mod='erp_integracion'}
 </div>
+
+<div id="erp-alert" class="alert" style="display: none;"></div>
 
 <!-- Panel de productos encontrados -->
 <div class="panel">

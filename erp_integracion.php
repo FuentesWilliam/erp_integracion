@@ -54,20 +54,22 @@ class ERP_integracion extends Module
     public function install()
     {
         // Configuración inicial durante la instalación
-        Configuration::updateValue('ERP_MANAGER_RUT', '92379000-4');
-        Configuration::updateValue('ERP_MANAGER_TOKEN', '3OIxJ644QBgB69AQk3r8uxha_Ma9__375CVsDC8_j_JU57__DM');
-        Configuration::updateValue('ERP_MANAGER_ENDPOINT', 'https://api.manager.cl/sec/prod/carrocompras.asmx/');
+        Configuration::updateValue('ERP_RUT', '');
+        Configuration::updateValue('ERP_TOKEN', '');
+        Configuration::updateValue('ERP_ENDPOINT_COMPRAS', '');
+        Configuration::updateValue('ERP_ENDPOINT_VENTAS', '');
 
         return parent::install() &&
-            $this->registerHook('displayBackOfficeHeader');
+            $this->registerHook('actionCustomerAccountAdd') &&
+            $this->registerHook('actionObjectAddressAddAfter');
     }
 
     public function uninstall()
     {
-        Configuration::deleteByName('ERP_MANAGER_RUT');
-        Configuration::deleteByName('ERP_MANAGER_TOKEN');
-        Configuration::deleteByName('ERP_MANAGER_ENDPOINT');
-
+        Configuration::deleteByName('ERP_RUT');
+        Configuration::deleteByName('ERP_TOKEN');
+        Configuration::deleteByName('ERP_ENDPOINT_COMPRAS');
+        Configuration::deleteByName('ERP_ENDPOINT_VENTAS');
         return parent::uninstall();
     }
 
@@ -84,11 +86,8 @@ class ERP_integracion extends Module
         $fields_value = $this->getConfigFormValues();
 
         // Generar URLs para cada acción del controlador AdminSync
-        // $syncStockUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncStock';
-        // $syncPricesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncPrices';
         $syncInventoryUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncInventory';
         $syncSalesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncSales';
-
 
         // Asignar URLs y otros valores a Smarty
         $this->context->smarty->assign([
@@ -150,7 +149,7 @@ class ERP_integracion extends Module
                         'type' => 'text',
                         'prefix' => '<i class="icon icon-user"></i>',
                         'desc' => $this->l('Introduzca un RUT válido'),
-                        'name' => 'ERP_MANAGER_RUT',
+                        'name' => 'ERP_RUT',
                         'label' => $this->l('Rut Empresa'),
                     ),
                     array(
@@ -158,7 +157,7 @@ class ERP_integracion extends Module
                         'type' => 'text',
                         'prefix' => '<i class="icon icon-key"></i>',
                         'desc' => $this->l('Introduzca un token válido'),
-                        'name' => 'ERP_MANAGER_TOKEN',
+                        'name' => 'ERP_TOKEN',
                         'label' => $this->l('Token'),
                     ),
                     array(
@@ -166,8 +165,16 @@ class ERP_integracion extends Module
                         'type' => 'text',
                         'prefix' => '<i class="icon icon-link"></i>',
                         'desc' => $this->l('Introduzca una URL válida'),
-                        'name' => 'ERP_MANAGER_ENDPOINT',
+                        'name' => 'ERP_ENDPOINT_COMPRAS',
                         'label' => $this->l('ERP'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-link"></i>',
+                        'desc' => $this->l('Introduzca una URL válida'),
+                        'name' => 'ERP_ENDPOINT_VENTAS',
+                        'label' => $this->l('ERP VENTAS'),
                     ),
                 ),
                 'submit' => array(
@@ -183,9 +190,10 @@ class ERP_integracion extends Module
     protected function getConfigFormValues()
     {
         return array(
-            'ERP_MANAGER_RUT' => Configuration::get('ERP_MANAGER_RUT', ''),
-            'ERP_MANAGER_TOKEN' => Configuration::get('ERP_MANAGER_TOKEN', ''),
-            'ERP_MANAGER_ENDPOINT' => Configuration::get('ERP_MANAGER_ENDPOINT', ''),
+            'ERP_RUT' => Configuration::get('ERP_RUT', ''),
+            'ERP_TOKEN' => Configuration::get('ERP_TOKEN', ''),
+            'ERP_ENDPOINT_COMPRAS' => Configuration::get('ERP_ENDPOINT_COMPRAS', ''),
+            'ERP_ENDPOINT_VENTAS' => Configuration::get('ERP_ENDPOINT_VENTAS', ''),
         );
     }
 
@@ -211,4 +219,61 @@ class ERP_integracion extends Module
             $this->context->controller->addCSS($this->_path.'views/css/back.css');
         }
     }
+
+    public function hookActionCustomerAccountAdd($params)
+    {
+        // // Obtenemos el ID del cliente recién creado
+        // $data = $params['newCustomer'];
+        // $customerId = $data->id;
+
+        // // Consulta SQL para recuperar el cliente y sus datos personalizados
+        // $sql = 'SELECT * FROM ' . _DB_PREFIX_ . 'customer WHERE id_customer = ' . (int)$customerId;
+        // $customerData = Db::getInstance()->getRow($sql);
+
+        // if ($customerData) {
+        //     // Maneja los datos del cliente
+        //     $logDir = _PS_MODULE_DIR_ . 'erp_integracion/logs/';    
+        //     $logFile = $logDir . 'sync_test.txt';
+        //     $date = new DateTime();
+        //     file_put_contents($logFile, $date->format('Y-m-d H:i:s') . " - " . print_r($customerData, true) . "\n", FILE_APPEND);
+
+        //     // Ejemplo: enviar datos al ERP
+        //     $syncService = new SyncService();
+        //     $syncService->syncAddClient([
+        //         'rut' => $customerData['rut'],
+        //         'firstname' => $customerData['firstname'],
+        //         'lastname' => $customerData['lastname'],
+        //         'email' => $customerData['email'],
+        //         'phone' => $customerData['phone'],
+        //         'giro' => $customerData['company_business_activity']
+        //     ]);
+        // }
+    }
+
+    public function hookActionObjectAddressAddAfter($params)
+    {
+        // $address = $params['object']; // Dirección recién agregada
+        // $customer = new Customer($address->id_customer);
+
+        // // Preparar datos para el ERP
+        // $customerData = [
+        //     'rut' => $customer->rut, // Asegúrate de asignar un campo RUT aquí.
+        //     'firstname' => $customer->firstname,
+        //     'lastname' => $customer->lastname,
+        //     'address' => $address->address1,
+        //     'comuna' => $address->postcode,
+        //     'city' => $address->city,
+        //     'address_delivery' => $address->address1, // Igual que address en este caso.
+        //     'comuna_delivery' => $address->postcode,
+        //     'city_delivery' => $address->city,
+        //     'email' => $customer->email,
+        //     'phone' => $customer->phone,
+        //     'giro' => $customer->company_business_activity
+        // ];
+
+        // // Instancia de SyncService y envío de datos
+        // $syncService = new SyncService();
+        // $syncService->addClient($customerData);
+    }
+
 }

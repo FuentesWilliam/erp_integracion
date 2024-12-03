@@ -32,6 +32,15 @@
     justify-content: center;
 }
 
+nav.navegador{
+    display: flex;
+    justify-content: space-between; /* Distribuye los botones a lo largo del ancho */
+    align-items: center; /* Alinea los botones verticalmente */
+    padding: 10px; /* Espaciado interno opcional */
+    width: 100%; /* Asegura que el contenedor tome el ancho completo */
+    box-sizing: border-box; /* Incluye padding en el cálculo del ancho */
+  }
+
 /* Estilo para el botón redondo */
 .btn-circle {
     display: inline-flex;
@@ -40,14 +49,72 @@
     width: 50px; /* Ajusta el tamaño del botón */
     height: 50px; /* Ajusta el tamaño del botón */
     border-radius: 50%; /* Hace el botón redondo */
-    background-color: #007bff; /* Color de fondo del botón */
-    color: white; /* Color del ícono */
     text-decoration: none;
-    font-size: 20px; /* Ajusta el tamaño del ícono */
     transition: background-color 0.3s ease; /* Efecto de transición al pasar el ratón */
+    padding: 0px !important;
 }
 
-.btn-circle:hover {
-    background-color: #0056b3; /* Color de fondo al pasar el ratón */
+/* Estilos generales para los botones */
+.btn-loading {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  font-size: 16px;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  overflow: hidden;
 }
 
+/* Spinner oculto por defecto */
+.btn-loading .spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Mostramos el spinner cuando está cargando */
+.btn-loading.loading .spinner {
+  display: inline-block;
+  margin-left: 8px; /* Añade un espacio entre el texto y el spinner */
+}
+
+/* Ocultamos el texto del botón cuando está cargando */
+.btn-loading.loading .button-text {
+  visibility: hidden;
+}
+
+/* Animación del spinner */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Estilo para celdas con diferencia de stock */
+.highlight-stock-difference {
+    color: #d32f2f; /* Rojo para texto */
+    font-weight: bold; /* Negrita */
+}
+
+/* Estilo para celdas con diferencia de precio */
+.highlight-price-difference {
+    color: #0277bd; /* Azul para texto */
+    font-weight: bold; /* Negrita */
+}
+
+/* Estilo para los íconos */
+.highlight-difference-icon {
+    color: #ff9800; /* Color del icono (naranja) */
+    margin-right: 8px; /* Separación entre el icono y el texto */
+}

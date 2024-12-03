@@ -1,16 +1,29 @@
 <?php
+require_once _PS_MODULE_DIR_ . 'erp_integracion/src/services/ProductSyncService.php';
+require_once _PS_MODULE_DIR_ . 'erp_integracion/src/services/CsvExportService.php';
 
 class AdminERPIntegracionSyncController extends ModuleAdminController
 {
+    private $productSyncService;
+    private $csvExportService;
+
     public function __construct()
     {
         parent::__construct();
         $this->bootstrap = true;
-    }
 
+        // Aquí puedes inicializar las clases si es necesario
+        $this->productSyncService = new ProductSyncService();
+        $this->csvExportService = new CsvExportService();
+    }
     public function initContent()
     {
         parent::initContent();
+
+        // Cargar el archivo CSS
+        $this->context->controller->addCSS(
+            $this->module->getPathUri() . 'views/css/back.css'
+        );
 
         // Obtener la acción solicitada y cargar la plantilla correspondiente
         $action = Tools::getValue('action');
@@ -27,63 +40,64 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
     public function sync_inventory(){
         // Generar URLs para cada acción de sincronización
         $mainUrl     = $this->context->link->getAdminLink('AdminModules') . '&configure=erp_integracion';
-        $getUrl      = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=getAll';
-        $updateUrlStock   = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updateStock';
-        $notFoundUrlStock = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=notFound';
-        $updateUrlPrice   = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updatePrice';
-        $notFoundUrlPrice = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=notFoundPrice';
+        $syncUrl     = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=sync';
+        $getAll      = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=getAll';
+        $updateStock = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updateStock';
+        $updatePrice = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updatePrice';
+        $notFound    = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=notFound';
+
 
         // Cargar el JS específico para esta página
         Media::addJsDef([
-            'pagination_url' => $getUrl,
-            'update_url_s' => $updateUrlStock,
-            'update_url_p' => $updateUrlPrice
+            'pagination_url' => $getAll,
+            'erp_url'        => $syncUrl,
+            'stock_url'      => $updateStock,
+            'price_url'      => $updatePrice
         ]);
         $this->context->controller->addJS($this->module->getPathUri() . 'views/js/all.js');
 
         $this->context->smarty->assign([
             'main_menu_url' => $mainUrl,
-            'download_not_found' => $notFoundUrlStock,
+            'download_not_found' => $notFound,
         ]);
 
         $this->setTemplate('sync_all.tpl');
     }
 
+    public function ajaxProcessSync()
+    {
+        $bool = $this->productSyncService->syncStockAndPrices();
+        die(json_encode(['status' => $bool]));
+    }
+
     public function ajaxProcessGetAll()
     {
-        // Configuración de paginación
         $page = Tools::getValue('page', 1);
         $itemsPerPage = Tools::getValue('itemsPerPage', 100);
 
-        // Leer el archivo JSON de productos
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/found.json';
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json';
         if (!file_exists($jsonFile)) {
             die(json_encode(['status' => 'error', 'message' => 'El archivo de datos de stock no existe.']));
         }
 
-        // Cargar y decodificar los datos de stock
         $stockData = json_decode(file_get_contents($jsonFile), true);
         $countUdpStock = $countUdpPrice = 0;
 
         foreach ($stockData as $product) {
-            if($product['stock'] !== $product['prestashop_stock']){
+            if ($product['stock'] !== $product['prestashop_stock']) {
                 $countUdpStock++;
             }
 
-            if($product['price'] !== $product['prestashop_price']){
+            if ($product['price'] !== $product['prestashop_price']) {
                 $countUdpPrice++;
             }
         }
 
-        // Calcular total de elementos y páginas después del filtrado
         $totalItems = count($stockData);
         $totalPages = ceil($totalItems / $itemsPerPage);
-
-        // Calcular el rango de elementos para la página actual
         $offset = ($page - 1) * $itemsPerPage;
         $pageData = array_slice($stockData, $offset, $itemsPerPage);
 
-        // Respuesta JSON
         die(json_encode([
             'status' => 'success',
             'data' => $pageData,
@@ -93,44 +107,52 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
             'totalPages' => $totalPages,
             'itemsPerPage' => $itemsPerPage,
         ]));
-    }
+    }      
 
     public function ajaxProcessUpdateStock()
     {
         // Leer el archivo JSON de productos
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/stock.json';
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/found.json';
         if (!file_exists($jsonFile)) {
-            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos de stock no existe.']));
+            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos no existe.']));
         }
 
-        $stockData = json_decode(file_get_contents($jsonFile), true);
-
-        // Filtrar solo los productos encontrados
-        $foundProducts = array_filter($stockData, function ($product) {
-            return isset($product['encontrado']) && $product['encontrado'] == 1;
-        });
+        $data = json_decode(file_get_contents($jsonFile), true);
 
         // Inicializar contadores para los resultados
         $updatedCount = 0;
         $errorCount = 0;
 
-        foreach ($foundProducts as $product) {
+        // Iterar sobre cada producto en el archivo JSON
+        foreach ($data as $product) {
             try {
                 // Obtener producto de PrestaShop por referencia
                 $product_id = Product::getIdByReference($product['reference']);
-                $quantity  = (int)$product['stock']; 
+                $quantity  = (int)$product['stock'];
 
-                // Verifica si el producto existe y actualiza su cantidad
+                // Verifica si el producto existe en PrestaShop
                 if ($product_id) {
-                    StockAvailable::setQuantity($product_id, 0, $quantity); // 0 es el ID de atributo (para productos simples)
-                    $updatedCount++;
+                    // Obtener el stock actual del producto en PrestaShop
+                    $currentStock = StockAvailable::getQuantityAvailableByProduct($product_id);
+
+                    // Verificamos si el stock ha cambiado
+                    if ($currentStock !== $quantity) {
+                        // Si el stock ha cambiado, actualizar
+                        StockAvailable::setQuantity($product_id, 0, $quantity); // 0 es el ID de atributo (para productos simples)
+                        $updatedCount++;
+                    }
                 } else {
+                    // Si no se encuentra el producto
                     $errorCount++;
                 }
             } catch (Exception $e) {
                 $errorCount++;
             }
         }
+
+        // Llamamos a la función que actualizará el archivo JSON con los datos modificados
+        $syncService = new SyncService();
+        $syncService->addPrestashopData();
         
         // Respuesta JSON
         die(json_encode([
@@ -143,39 +165,49 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
     public function ajaxProcessUpdatePrice()
     {
         // Leer el archivo JSON de productos
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/stock.json';
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/found.json';
         if (!file_exists($jsonFile)) {
-            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos de stock no existe.']));
+            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos no existe.']));
         }
 
-        $stockData = json_decode(file_get_contents($jsonFile), true);
-
-        // Filtrar solo los productos encontrados
-        $foundProducts = array_filter($stockData, function ($product) {
-            return isset($product['encontrado']) && $product['encontrado'] == 1;
-        });
+        $data = json_decode(file_get_contents($jsonFile), true);
 
         // Inicializar contadores para los resultados
         $updatedCount = 0;
         $errorCount = 0;
 
-        foreach ($foundProducts as $product) {
+        // Iterar sobre cada producto en el archivo JSON
+        foreach ($data as $product) {
             try {
                 // Obtener producto de PrestaShop por referencia
                 $product_id = Product::getIdByReference($product['reference']);
-                $quantity  = (int)$product['stock']; 
+                $price = (float)$product['price'];
 
-                // Verifica si el producto existe y actualiza su cantidad
+                // Verifica si el producto existe en PrestaShop
                 if ($product_id) {
-                    StockAvailable::setQuantity($product_id, 0, $quantity); // 0 es el ID de atributo (para productos simples)
-                    $updatedCount++;
+                    
+                    $product = new Product($product_id);
+                    $currentPrice = $product->price;
+
+                    // Verificamos si el precio ha cambiado
+                    if ($currentPrice !== $price) {
+                        // Si el precio ha cambiado, actualizar
+                        $product->price = $price;  // Actualizamos el precio
+                        $product->update();  // Guardamos el cambio
+                        $updatedCount++;
+                    }
                 } else {
+                    // Si no se encuentra el producto
                     $errorCount++;
                 }
             } catch (Exception $e) {
                 $errorCount++;
             }
         }
+
+        // Llamamos a la función que actualizará el archivo JSON con los datos modificados
+        $syncService = new SyncService();
+        $syncService->addPrestashopData();
         
         // Respuesta JSON
         die(json_encode([
@@ -187,46 +219,15 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
 
     public function ajaxProcessNotFound()
     {
-        // Leer el archivo JSON de productos
         $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/stock.json';
         if (!file_exists($jsonFile)) {
             die(json_encode(['status' => 'error', 'message' => 'El archivo de datos de stock no existe.']));
         }
 
         $stockData = json_decode(file_get_contents($jsonFile), true);
+        $csvFile = $this->csvExportService->exportNotFoundProducts($stockData);
 
-        // Filtrar productos que NO están en PrestaShop
-        $notFoundProducts = array_filter($stockData, function ($product) {
-            return isset($product['encontrado']) && $product['encontrado'] == 0;
-        });
-
-        // Definir el nombre y la ruta del archivo CSV temporal
-        $csvFile = tempnam(sys_get_temp_dir(), 'no_encontrados_') . '.csv';
-
-        // Crear el archivo CSV y agregar encabezados
-        $fileHandle = fopen($csvFile, 'w');
-        fputcsv($fileHandle, ['Referencia']); // Cambia los encabezados según tus campos
-
-        // Añadir datos de productos no encontrados al CSV
-        foreach ($notFoundProducts as $product) {
-            fputcsv($fileHandle, [
-                $product['reference']
-            ]);
-        }
-
-        fclose($fileHandle);
-
-        // Configuración de la descarga del archivo
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="productos_no_encontrados.csv"');
-        header('Content-Length: ' . filesize($csvFile));
-
-        // Enviar el archivo al navegador y luego eliminarlo del servidor
-        readfile($csvFile);
-        unlink($csvFile);
-        exit;
+        $this->csvExportService->downloadCsv($csvFile);
     }
-
-
 }
 

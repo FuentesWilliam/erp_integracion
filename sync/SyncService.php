@@ -19,7 +19,7 @@ class SyncService extends ErpSyncBase
         $endpointName = "consultaInfoProductos";
         $addParams = "&codProd=";
 
-        $cleanedXml = $this->fetchErpData($endpointName, $addParams);
+        $cleanedXml = $this->fetchErpCompras($endpointName, $addParams, false);
         if ($cleanedXml === false) {
             return;
         }
@@ -32,26 +32,26 @@ class SyncService extends ErpSyncBase
             return;
         }
 
-        /** ## Ejemplo de lo que trae el XML
-        * <PRODUCTO>
-        *     <RESPUESTA>
-        *         <CODIGO>56170264</CODIGO>
-        *         <NOMBRE>JUEGO DE REPARACION</NOMBRE>
-        *         <Stock>0.0000000</Stock>
-        *         <CodBodega>B01</CodBodega>
-        *         <Bodega>BOD.PRINCIPAL</Bodega>
-        *         <PrecioVenta>1072147.00000</PrecioVenta>
-        *     </RESPUESTA>
-        *    <RESPUESTA>
-        *         <CODIGO>56170264</CODIGO>
-        *         <NOMBRE>JUEGO DE REPARACION</NOMBRE>
-        *         <Stock>0.0000000</Stock>
-        *         <CodBodega>B04</CodBodega>
-        *         <Bodega>BOD.LINDEROS</Bodega>
-        *         <PrecioVenta>1072147.00000</PrecioVenta>
-        *     </RESPUESTA>
-        *     <RESPUESTA> .... </RESPUESTA>
-        * */
+            /** ## Ejemplo de lo que trae el XML
+            * <PRODUCTO>
+            *     <RESPUESTA>
+            *         <CODIGO>56170264</CODIGO>
+            *         <NOMBRE>JUEGO DE REPARACION</NOMBRE>
+            *         <Stock>0.0000000</Stock>
+            *         <CodBodega>B01</CodBodega>
+            *         <Bodega>BOD.PRINCIPAL</Bodega>
+            *         <PrecioVenta>1072147.00000</PrecioVenta>
+            *     </RESPUESTA>
+            *    <RESPUESTA>
+            *         <CODIGO>56170264</CODIGO>
+            *         <NOMBRE>JUEGO DE REPARACION</NOMBRE>
+            *         <Stock>0.0000000</Stock>
+            *         <CodBodega>B04</CodBodega>
+            *         <Bodega>BOD.LINDEROS</Bodega>
+            *         <PrecioVenta>1072147.00000</PrecioVenta>
+            *     </RESPUESTA>
+            *     <RESPUESTA> .... </RESPUESTA>
+            * */
 
         $filteredArray = [];
         foreach ($xml->RESPUESTA as $producto) {
@@ -148,15 +148,206 @@ class SyncService extends ErpSyncBase
         $this->logMessage("Creación de stock y precio de PrestaShop completada con éxito.");
     }
 
+    public function syncAddClient($customerData)
+    {
+        $endpointName = 'insertaCliente';
+
+        try {
+            // Validar datos obligatorios
+            $requiredFields = ['rut', 'firstname', 'lastname', 'email'];
+            foreach ($requiredFields as $field) {
+                if (empty($customerData[$field])) {
+                    throw new Exception("El campo '$field' es obligatorio pero está vacío.");
+                }
+            }
+
+            // Construir parámetros para el ERP
+            $params = [
+                'rut' => $customerData['rut'],
+                'nombre' => "{$customerData['firstname']} {$customerData['lastname']}",
+                'dir' => $customerData['address'] ?? '',
+                'comuna' => $customerData['comuna'] ?? '',
+                'ciudad' => $customerData['city'] ?? '',
+                'dirDespacho' => $customerData['address_delivery'] ?? '',
+                'comunaDespacho' => $customerData['comuna_delivery'] ?? '',
+                'ciudadDespacho' => $customerData['city_delivery'] ?? '',
+                'email' => $customerData['email'],
+                'fono' => $customerData['phone'] ?? '',
+                'giro' => $customerData['giro'] ?? '',
+            ];
+
+            // Construir la URL de consulta
+            $addParams = http_build_query($params);
+
+            // Llamar al endpoint del ERP
+            $xml = $this->fetchErpVentas($endpointName, $addParams, true);
+
+            // Validar la respuesta del ERP
+            if (!$xml) {
+                throw new Exception("No se recibió una respuesta válida del ERP.");
+            }
+
+            // Analizar la respuesta XML (ejemplo)
+            $response = simplexml_load_string($xml);
+            // if (!$response || (string)$response->status !== 'success') {
+            //     $errorMsg = $response->message ?? "Respuesta desconocida del ERP";
+            //     throw new Exception("Error del ERP: " . $errorMsg);
+            // }
+
+            // Log de éxito
+            $this->logMessage("Cliente agregado correctamente al ERP: " . print_r($response, true));
+            return true;
+        } catch (Exception $e) {
+            // Log de error
+            $this->logMessage("Fallo al intentar agregar un cliente al ERP: " . $e->getMessage(), 'sync_error.txt');
+            return false;
+        }
+    }
+
+    public function syncAddInvoice($invoiceData)
+    {
+        $endpointName = 'IngresaCabeceraDeFacturaDeVenta';
+        try {
+            // Validar datos obligatorios
+            //$requiredFields = ['rut', 'firstname', 'lastname', 'email'];
+            //foreach ($requiredFields as $field) {
+            //    if (empty($customerData[$field])) {
+            //        throw new Exception("El campo '$field' es obligatorio pero está vacío.");
+            //    }
+            //}
+
+            // Construir parámetros para el ERP
+            $params = [
+                'numDocumento' => $invoiceData['numDocumento'] ?? '',
+                'fecha' => $invoiceData['fecha'] ?? '',
+                'fechaVencimiento' => $invoiceData['fechaVencimiento'] ?? '',
+                'rutFactA' => $invoiceData['rutFactA'] ?? '',
+                'glosaPago' => $invoiceData['glosaPago'] ?? '',
+                'rutCliente' => $invoiceData['rutCliente'] ?? '',
+                'codigoMoneda' => $invoiceData['codigoMoneda'] ?? '',
+                'codigoComisionista' => $invoiceData['codigoComisionista'] ?? '',
+                'comision' => $invoiceData['comision'] ?? '',
+                'codigoVendedor' => $invoiceData['codigoVendedor'] ?? '',
+                'tipoVenta' => $invoiceData['tipoVenta'] ?? '',
+                'numeroGuia' => $invoiceData['numeroGuia'] ?? '',
+                'numeroOc' => $invoiceData['numeroOc'] ?? '',
+                'descuentoTipo' => $invoiceData['descuentoTipo'] ?? '',
+                'descuento' => $invoiceData['descuento'] ?? '',
+                'codigoSucursal' => $invoiceData['codigoSucursal'] ?? '',
+                'tipoDespacho' => $invoiceData['tipoDespacho'] ?? '',
+                'emitePacking' => $invoiceData['emitePacking'] ?? '',
+                'rebajaStock' => $invoiceData['rebajaStock'] ?? '',
+                'proforma' => $invoiceData['proforma'] ?? '',
+                'nula' => $invoiceData['nula'] ?? '',
+                'esElectronica' => $invoiceData['esElectronica'] ?? '',
+                'formaPago' => $invoiceData['formaPago'] ?? '',
+                'atencionA' => $invoiceData['atencionA'] ?? '',
+                'codigoCtaCble' => $invoiceData['codigoCtaCble'] ?? '',
+                'codigoCentroCosto' => $invoiceData['codigoCentroCosto'] ?? '',
+                'glosaContable' => $invoiceData['glosaContable'] ?? '',
+                'numOt' => $invoiceData['numOt'] ?? '',
+                'procesoNum' => $invoiceData['procesoNum'] ?? '',
+                'numCaja' => $invoiceData['numCaja'] ?? '',
+                'turno' => $invoiceData['turno'] ?? '',
+                'obra' => $invoiceData['obra'] ?? '',
+                'observaciones' => $invoiceData['observaciones'] ?? '',
+                'codelcoOcNum' => $invoiceData['codelcoOcNum'] ?? '',
+                'codelcoFechaOc' => $invoiceData['codelcoFechaOc'] ?? '',
+                'codelcoHesNum' => $invoiceData['codelcoHesNum'] ?? '',
+                'codelcoFechaHes' => $invoiceData['codelcoFechaHes'] ?? '',
+                'codelcoGDNum' => $invoiceData['codelcoGDNum'] ?? '',
+                'codelcoFechaGdve' => $invoiceData['codelcoFechaGdve'] ?? '',
+                'codigoPersonal' => $invoiceData['codigoPersonal'] ?? '',
+            ];
+
+            // Construir la URL de consulta
+            $addParams = http_build_query($params);
+
+            // Llamar al endpoint del ERP
+            $xml = $this->fetchErpVentas($endpointName, "&". $addParams, true);
+
+            // Validar la respuesta del ERP
+            if (!$xml) {
+                throw new Exception("No se recibió una respuesta válida del ERP.");
+            }
+
+            // Analizar la respuesta XML (ejemplo)
+            $response = simplexml_load_string($xml);
+            return $response;
+
+            // if (!$response || (string)$response->status !== 'success') {
+            //     $errorMsg = $response->message ?? "Respuesta desconocida del ERP";
+            //     throw new Exception("Error del ERP: " . $errorMsg);
+            // }
+
+            // Log de éxito
+            //$this->logMessage("Factura agregada correctamente al ERP: " . print_r($response, true));
+            //return true;
+            
+        } catch (Exception $e) {
+            // Log de error
+            $this->logMessage("Fallo al intentar agregar una Factura al ERP: " . $e->getMessage(), 'sync_error.txt');
+            return false;
+        }
+
+    }
+
 }
 
-// Ejecutar el servicio y manejar errores
-$service = new SyncService();
+// // Datos de prueba para la factura
+// $testInvoiceData = [
+//     'numDocumento' => '120',
+//     'fecha' => '28-11-2024',
+//     'fechaVencimiento' => '28-11-2024',
+//     'rutFactA' => '92379000-4',
+//     'glosaPago' => '',
+//     'rutCliente' => '92379000-4',
+//     'codigoMoneda' => '$',
+//     'codigoComisionista' => '',
+//     'comision' => '0',
+//     'codigoVendedor' => '',
+//     'tipoVenta' => '0',
+//     'numeroGuia' => '0',
+//     'numeroOc' => '0',
+//     'descuentoTipo' => '0',
+//     'descuento' => '0',
+//     'codigoSucursal' => '1',
+//     'tipoDespacho' => '0',
+//     'emitePacking' => '0',
+//     'rebajaStock' => '1',
+//     'proforma' => '0',
+//     'nula' => '0',
+//     'esElectronica' => '1',
+//     'formaPago' => 'Efectivo',
+//     'atencionA' => '',
+//     'codigoCtaCble' => '110501',
+//     'codigoCentroCosto' => '',
+//     'glosaContable' => '',
+//     'numOt' => '0',
+//     'procesoNum' => '0',
+//     'numCaja' => '0',
+//     'turno' => '0',
+//     'obra' => '',
+//     'observaciones' => '',
+//     'codelcoOcNum' => '0',
+//     'codelcoFechaOc' => '2024-11-28',
+//     'codelcoHesNum' => '0',
+//     'codelcoFechaHes' => '2024-11-28',
+//     'codelcoGDNum' => '0',
+//     'codelcoFechaGdve' => '28-11-2024',
+//     'codigoPersonal' => 'MME',
+// ];
 
-try {
-    //$service->syncStockAndPrices();
-    $service->addPrestashopData();
-} catch (Exception $e) {
-    // Registrar cualquier excepción
-    $service->logMessage("Excepción en SyncService: " . $e->getMessage(), 'sync_error.txt');
-}
+// // Llamar a la función
+// $syncService = new SyncService();
+// $result = $syncService->syncAddInvoice($testInvoiceData);
+
+// if ($result) {
+//     echo "<pre> ";
+//     echo "--> data: ";
+//     var_dump($testInvoiceData);
+//     var_dump($result);
+//     echo "</pre>";
+// } else {
+//     echo "Error al sincronizar la factura.";
+// }
