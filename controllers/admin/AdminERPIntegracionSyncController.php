@@ -16,6 +16,7 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
         $this->productSyncService = new ProductSyncService();
         $this->csvExportService = new CsvExportService();
     }
+    
     public function initContent()
     {
         parent::initContent();
@@ -62,12 +63,19 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
         ]);
 
         $this->setTemplate('sync_all.tpl');
+        
     }
 
     public function ajaxProcessSync()
     {
-        $bool = $this->productSyncService->syncStockAndPrices();
-        die(json_encode(['status' => $bool]));
+        // Primero sincronizamos stock y precios
+        $syncResult = $this->productSyncService->syncStockAndPrices();
+
+        // Luego comparamos los productos con PrestaShop
+        $compareResult = $this->productSyncService->compareProductsWithPrestashop();
+
+        // Retornamos el resultado de ambas operaciones
+        die(json_encode(['status' => $syncResult && $compareResult]));
     }
 
     public function ajaxProcessGetAll()
@@ -229,5 +237,6 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
 
         $this->csvExportService->downloadCsv($csvFile);
     }
+
 }
 

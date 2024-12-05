@@ -2,9 +2,29 @@
 
 class Logger
 {
-    // Ruta del archivo de log
-    const LOG_FILE = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_log.txt';
-    const ERROR_LOG_FILE = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_error.txt';
+    // Archivos de log por defecto
+    private static $logFile = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_log.txt';
+    private static $errorLogFile = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_error.txt';
+
+    /**
+     * Establece el archivo de log general.
+     * 
+     * @param string $file Ruta del archivo de log
+     */
+    public static function setLogFile($file)
+    {
+        self::$logFile = $file;
+    }
+
+    /**
+     * Establece el archivo de log de errores.
+     * 
+     * @param string $file Ruta del archivo de log de errores
+     */
+    public static function setErrorLogFile($file)
+    {
+        self::$errorLogFile = $file;
+    }
 
     /**
      * Escribe un mensaje de log en el archivo general de logs.
@@ -13,7 +33,7 @@ class Logger
      */
     public static function logInfo($message)
     {
-        self::writeLog(self::LOG_FILE, "[INFO] " . self::getTimestamp() . " - " . $message);
+        self::writeLog(self::$logFile, "[INFO] " . self::getTimestamp() . " - " . $message);
     }
 
     /**
@@ -23,7 +43,7 @@ class Logger
      */
     public static function logWarning($message)
     {
-        self::writeLog(self::LOG_FILE, "[WARNING] " . self::getTimestamp() . " - " . $message);
+        self::writeLog(self::$logFile, "[WARNING] " . self::getTimestamp() . " - " . $message);
     }
 
     /**
@@ -33,7 +53,7 @@ class Logger
      */
     public static function logError($message)
     {
-        self::writeLog(self::ERROR_LOG_FILE, "[ERROR] " . self::getTimestamp() . " - " . $message);
+        self::writeLog(self::$errorLogFile, "[ERROR] " . self::getTimestamp() . " - " . $message);
     }
 
     /**
@@ -41,20 +61,31 @@ class Logger
      * 
      * @param string $file El archivo donde se guardará el log
      * @param string $message El mensaje que se guardará en el archivo
+     * @throws Exception Si no se puede escribir en el archivo
      */
     private static function writeLog($file, $message)
     {
-        if (file_exists($file)) {
-            // Verificar si el archivo es escribible
-            if (is_writable($file)) {
-                file_put_contents($file, $message . PHP_EOL, FILE_APPEND);
-            } else {
-                // Si el archivo no es escribible, se escribirá un mensaje en el log de errores
-                error_log("No se puede escribir en el archivo de log: " . $file);
+        // Verifica si el directorio existe, si no, lo crea
+        if (!file_exists(dirname($file))) {
+            if (!mkdir(dirname($file), 0777, true)) {
+                throw new Exception("No se pudo crear el directorio para los logs: " . dirname($file));
             }
+        }
+
+        // Abre el archivo de log en modo 'append' (agregar al final)
+        $fileHandle = fopen($file, 'a');
+        if ($fileHandle) {
+            // Bloquea el archivo para evitar accesos simultáneos
+            if (flock($fileHandle, LOCK_EX)) {
+                fwrite($fileHandle, $message . PHP_EOL);
+                flock($fileHandle, LOCK_UN);  // Libera el bloqueo
+            } else {
+                fclose($fileHandle);
+                throw new Exception("No se pudo bloquear el archivo para escritura: " . $file);
+            }
+            fclose($fileHandle);
         } else {
-            // Si el archivo no existe, crearlo
-            file_put_contents($file, $message . PHP_EOL);
+            throw new Exception("No se puede abrir el archivo de log: " . $file);
         }
     }
 

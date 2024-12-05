@@ -24,6 +24,8 @@
 *  International Registered Trademark & Property of PrestaShop SA
 */
 
+require_once 'src/services/ClientSyncService.php';
+
 if (!defined('_PS_VERSION_')) {
     exit;
 }
@@ -222,32 +224,37 @@ class ERP_integracion extends Module
 
     public function hookActionCustomerAccountAdd($params)
     {
-        // // Obtenemos el ID del cliente recién creado
-        // $data = $params['newCustomer'];
-        // $customerId = $data->id;
+        // Obtenemos el ID del cliente recién creado
+        $data = $params['newCustomer'];
+        $customerId = $data->id;
+        
+        // Cargar datos del cliente utilizando la clase Customer
+        $customer = new Customer($customerId);
 
-        // // Consulta SQL para recuperar el cliente y sus datos personalizados
-        // $sql = 'SELECT * FROM ' . _DB_PREFIX_ . 'customer WHERE id_customer = ' . (int)$customerId;
-        // $customerData = Db::getInstance()->getRow($sql);
+        if (Validate::isLoadedObject($customer)) {
+            $clientData = [
+                'rut' => $customer['rut'],
+                'firstname' => $customer['firstname'],
+                'lastname' => $customer['lastname'],
+                'email' => $customer['email'],
+                'phone' => $customer['phone'],
+                'giro' => $customer['company_business_activity']
+            ];
+            
+            // Sincronizar con el ERP
+            try {
+                $syncService = new ClientSyncService();
+                $result = $syncService->addClient($clientData);
 
-        // if ($customerData) {
-        //     // Maneja los datos del cliente
-        //     $logDir = _PS_MODULE_DIR_ . 'erp_integracion/logs/';    
-        //     $logFile = $logDir . 'sync_test.txt';
-        //     $date = new DateTime();
-        //     file_put_contents($logFile, $date->format('Y-m-d H:i:s') . " - " . print_r($customerData, true) . "\n", FILE_APPEND);
-
-        //     // Ejemplo: enviar datos al ERP
-        //     $syncService = new SyncService();
-        //     $syncService->syncAddClient([
-        //         'rut' => $customerData['rut'],
-        //         'firstname' => $customerData['firstname'],
-        //         'lastname' => $customerData['lastname'],
-        //         'email' => $customerData['email'],
-        //         'phone' => $customerData['phone'],
-        //         'giro' => $customerData['company_business_activity']
-        //     ]);
-        // }
+                if (!$result) {
+                    Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
+                }
+            } catch (Exception $e) {
+                Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
+            }
+        } else {
+            Logger::logError("Error al cargar cliente ID: $customerId.");
+        }
     }
 
     public function hookActionObjectAddressAddAfter($params)

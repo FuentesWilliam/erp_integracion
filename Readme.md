@@ -4,8 +4,6 @@
 /mi_modulo_erp/
 │
 ├── /src/                            # Código fuente del módulo
-│   ├── /Controller/                  # Controladores del módulo (controladores front/back)
-│   │   ├── AdminSyncController.php   # Controlador principal para la sincronización desde el back-office
 │   │
 │   ├── /Service/                     # Lógica del negocio, los servicios
 │   │   ├── ErpSyncBase.php           # Clase base para interacción con el ERP

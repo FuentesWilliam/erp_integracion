@@ -1,4 +1,8 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+
 require_once _PS_MODULE_DIR_ . '/erp_integracion/src/utils/Logger.php';
 
 /**
@@ -36,8 +40,13 @@ abstract class ErpSyncBase
      */
     public function __construct()
     {
-        $this->initializeConfig();
-        $this->validateConfig();
+        try {
+            $this->initializeConfig();
+            $this->validateConfig();
+        } catch (Exception $e) {
+            Logger::logError("Error en la inicialización del ERP: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -62,7 +71,6 @@ abstract class ErpSyncBase
             || empty($this->erpToken) 
             || empty($this->erpEndpointCompras) 
             || empty($this->erpEndpointVentas)) {
-            Logger::logError('Error: Faltan configuraciones necesarias para el ERP: ');
             throw new Exception('Configuraciones de ERP incompletas.');
         }
     }
@@ -105,7 +113,7 @@ abstract class ErpSyncBase
     private function fetchErpData($baseUrl, $endpointName, $additionalParams, $isUtf8)
     {
         try {
-            $url = "{$baseUrl}{$endpointName}?rutEmpresa={$this->rutEmpresa}&token={$this->erpToken}{$additionalParams}";
+            $url = "{$baseUrl}{$endpointName}?rutEmpresa={$this->rutEmpresa}&token={$this->erpToken}&{$additionalParams}";
 
             $response = @file_get_contents($url);
 
