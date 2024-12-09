@@ -1,4 +1,7 @@
 <?php
+// error_reporting(E_ALL);
+// ini_set('display_errors', '1');
+// ini_set('display_startup_errors', '1');
 ini_set('memory_limit', '1024M');
 ini_set('max_execution_time', 600); // 10 minutos
 
@@ -21,6 +24,8 @@ class ProductSyncService extends ErpSyncBase
      */
     public function syncStockAndPrices()
     {
+        Logger::logSync("Iniciando sincronización de productos...", "pending", null);
+
         $endpointName = "consultaInfoProductos";
         $addParams = "codProd=";
 
@@ -31,18 +36,11 @@ class ProductSyncService extends ErpSyncBase
             // Procesar los datos recibidos
             $this->processProductData($data);
 
+            Logger::logSync("productos sincronizado correctamente", "success", null);
             return true;
 
         } catch (Exception $e) {
-            // Log de error con detalles adicionales
-            Logger::logError("Error al sincronizar productos: " . $e->getMessage());
-            
-            // Obtener el trace y tomar solo la línea 0
-            //$trace = debug_backtrace();
-            //$errorDetails = $trace[0];
-
-            // Log del trace con detalles de la línea 0
-            //Logger::logError("Error en " . $errorDetails['file'] . " en la línea " . $errorDetails['line'] . " en la función " . $errorDetails['function']);
+            Logger::logSync("Error al sincronizar productos", "failure", ['error' => $e->getMessage()]);
             return false;
             
         }
@@ -54,12 +52,15 @@ class ProductSyncService extends ErpSyncBase
      */
     public function compareProductsWithPrestashop()
     {
+        Logger::logSync("Iniciando comparacion de productos... ", "pending");
+
         try {
             // 1. Obtener referencias de productos de PrestaShop
             $prestashopData = $this->getPrestashopReferences();
 
             // 2. Cargar datos desde el archivo JSON
             $jsonData = $this->loadJsonData(_PS_MODULE_DIR_ . 'erp_integracion/src/cache/data.json');
+            $jsonData = $this->keepLastReference($jsonData);
 
             // 3. Comparar datos y generar listas de encontrados y no encontrados
             [$foundProducts, $notFoundProducts] = $this->compareProductData($jsonData, $prestashopData);
@@ -68,11 +69,11 @@ class ProductSyncService extends ErpSyncBase
             $this->saveJsonToFile(_PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json', $foundProducts);
             $this->saveJsonToFile(_PS_MODULE_DIR_ . 'erp_integracion/src/cache/notFound.json', $notFoundProducts);
 
-            Logger::logInfo("Creación de stock y precio de PrestaShop completada con éxito.");
+            Logger::logSync("comparacion de productos correctamente", "success");
             return true;
 
         } catch (Exception $e) {
-            Logger::logError("Error al comparar productos: " . $e->getMessage());
+            Logger::logSync("Error al comparacion de productos", "failure", ['error' => $e->getMessage()]);
             return false;
 
         }
@@ -85,12 +86,15 @@ class ProductSyncService extends ErpSyncBase
      */
     public function updateStock()
     {
+        Logger::logSync("Iniciando actualizacion de stock...", "pending", null);
+
         try {
-            // Cargar los datos de precios desde el archivo JSON
+            // Cargar los datos desde el archivo JSON
             $jsonData = $this->loadJsonData(_PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json');
             $updatedCount = 0;
             $errorCount = 0;
 
+            // Iterar sobre los productos en el archivo JSON
             foreach ($jsonData as $product) {
                 $product_id = Product::getIdByReference($product['reference']);
                 $quantity = (int)$product['stock'];
@@ -99,26 +103,28 @@ class ProductSyncService extends ErpSyncBase
                     $currentStock = StockAvailable::getQuantityAvailableByProduct($product_id);
                     if ($currentStock !== $quantity) {
                         StockAvailable::setQuantity($product_id, 0, $quantity);
+
                         $updatedCount++; // Incrementar el contador de actualizaciones
                     }
                 } else {
                     $errorCount++;
-                    // Log de error si no se encuentra el producto
-                    Logger::logError("No se encontró el producto con referencia: " . $product['reference']);
+                    Logger::logSync("No se encontró el producto con referencia:", "failure", $product['reference']);
                 }
             }
 
+            Logger::logSync("actualizacion de stock correctamente", "success", ['Actualizados: ' => $updatedCount, 'Errores' => $errorCount]);
+
             // Devolver el resultado después de procesar todos los productos
             return [
-                'status' => 'success',
+                'status' => TRUE,
                 'updated' => $updatedCount,
                 'errors' => $errorCount,
             ];
             
         } catch (Exception $e) {
             // Si ocurre algún error al cargar el archivo JSON, se maneja aquí
-            Logger::error('El archivo de datos de stock no existe o hubo un error: ' . $e->getMessage());
-            return ['status' => 'error', 'message' => $e->getMessage()];
+            Logger::logSync('El archivo de datos no existe o hubo un error: ', "failure", ['error' => $e->getMessage()]);
+            return ['status' => FALSE, 'message' => $e->getMessage()];
         } 
     }
 
@@ -129,20 +135,20 @@ class ProductSyncService extends ErpSyncBase
      */
     public function updatePrice()
     {
+         Logger::logSync("Iniciando actualizacion de precios...", "pending", null);
+
         try {
-            // Cargar los datos de precios desde el archivo JSON
+            // Cargar los datos desde el archivo JSON
             $jsonData = $this->loadJsonData(_PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json');
             $updatedCount = 0;
             $errorCount = 0;
 
             // Iterar sobre los productos en el archivo JSON
             foreach ($jsonData as $product) {
-                // Obtener el ID del producto por referencia
                 $product_id = Product::getIdByReference($product['reference']);
                 $price = (float)$product['price'];
 
                 if ($product_id) {
-                    // Cargar el producto de PrestaShop
                     $product = new Product($product_id);
                     $currentPrice = $product->price;
 
@@ -150,26 +156,28 @@ class ProductSyncService extends ErpSyncBase
                     if ($currentPrice !== $price) {
                         $product->price = $price;
                         $product->update();
+
                         $updatedCount++; // Incrementar el contador de actualizaciones
                     }
                 } else {
-                    $errorCount++; // Incrementar el contador de errores si no se encuentra el producto
-                    // Log de error si no se encuentra el producto
-                    Logger::logError("No se encontró el producto con referencia: " . $product['reference']);
+                    $errorCount++;
+                    Logger::logSync("No se encontró el producto con referencia:", "failure", $product['reference']);
                 }
             }
 
+            Logger::logSync("actualizacion de precios correctamente", "success", ['Actualizados: ' => $updatedCount, 'Errores' => $errorCount]);
+
             // Devolver el resultado después de procesar todos los productos
             return [
-                'status' => 'success',
+                'status' => TRUE,
                 'updated' => $updatedCount,
                 'errors' => $errorCount,
             ];
 
         } catch (Exception $e) {
             // Si ocurre algún error al cargar el archivo JSON, se maneja aquí
-            Logger::error('El archivo de datos de precios no existe o hubo un error: ' . $e->getMessage());
-            return ['status' => 'error', 'message' => $e->getMessage()];
+            Logger::logSync('El archivo de datos no existe o hubo un error: ', "failure", ['error' => $e->getMessage()]);
+            return ['status' => FALSE, 'message' => $e->getMessage()];
         }        
     }
 
@@ -281,4 +289,14 @@ class ProductSyncService extends ErpSyncBase
         }
     }
 
+    private function keepLastReference($jsonData)
+    {
+        $uniqueData = [];
+        foreach ($jsonData as $item) {
+            // Sobrescribe cada vez que encuentra la misma referencia
+            $uniqueData[$item['reference']] = $item;
+        }
+        // Devuelve solo los valores (descartando las claves asociativas)
+        return array_values($uniqueData);
+    }
 }

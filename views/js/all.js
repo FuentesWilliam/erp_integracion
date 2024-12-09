@@ -173,7 +173,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const data = await response.json(); // Parseamos la respuesta JSON
 
                 if (data.status) {
-                    showAlert(successMessage, 'success'); // Muestra mensaje de éxito
+                    showAlert(successMessage + `Actualizados: ${data.updated}`, 'success'); // Muestra mensaje de éxito
                 } else {
                     showAlert(errorMessage, 'danger'); // Muestra el mensaje de error
                 }

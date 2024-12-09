@@ -44,7 +44,7 @@ abstract class ErpSyncBase
             $this->initializeConfig();
             $this->validateConfig();
         } catch (Exception $e) {
-            Logger::logError("Error en la inicialización del ERP: " . $e->getMessage());
+            Logger::logSync('Error en la inicialización del ERP: ', 'failure', ['error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -118,14 +118,14 @@ abstract class ErpSyncBase
             $response = @file_get_contents($url);
 
             if ($response === false) {
-                Logger::logError("Error al conectarse al endpoint '$endpointName'. URL: $url");
+                Logger::logSync('Error con la peticion: ', 'failure', ['endpointName' => $endpointName, 'URL: ' => $url]);
                 return false;
             }
 
             return $isUtf8 ? $response : $this->cleanXmlData($response);
 
         } catch (Exception $e) {
-            Logger::logError("Excepción en fetchErpData: " . $e->getMessage());
+            Logger::logSync('Excepción en fetchErpData: ', 'failure', ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -140,7 +140,7 @@ abstract class ErpSyncBase
     {
         $lines = explode("\n", $response);
         if (!isset($lines[5])) {
-            Logger::logError('Error: La línea 5 no existe en la respuesta del ERP.');
+            Logger::logSync('Error: La línea 5 no existe en la respuesta del ERP.', 'failure', ['response' => $response]);
             return false;
         }
 
@@ -153,7 +153,7 @@ abstract class ErpSyncBase
          * */
 
         if (empty($decodedXml)) {
-            Logger::logError('Error: El contenido XML está vacío después de la limpieza.');
+            Logger::logSync('Error: El contenido XML está vacío después de la limpieza.', 'failure', ['response' => $response]);
             return false;
         }
 

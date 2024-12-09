@@ -2,68 +2,26 @@
 
 class Logger
 {
-    // Archivos de log por defecto
-    private static $logFile = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_log.txt';
-    private static $errorLogFile = _PS_MODULE_DIR_ . 'erp_integracion/src/logs/sync_error.txt';
 
-    /**
-     * Establece el archivo de log general.
-     * 
-     * @param string $file Ruta del archivo de log
-     */
-    public static function setLogFile($file)
+    // Método público para registrar un mensaje en el archivo JSON de logs
+    public static function logSync($message, $status, $context = null)
     {
-        self::$logFile = $file;
+        $date = date('Y-m-d'); // Obtener la fecha actual
+        $logFilePath = _PS_MODULE_DIR_ . "erp_integracion/src/logs/sync_log_{$date}.json";
+
+        // Crear la entrada del log
+        $logEntry = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'message' => $message,
+            'status' => $status, // success, failure, pending
+            'context' => $context
+        ];
+
+        // Llamar a la función estática para escribir el log
+        self::writeJsonLog($logFilePath, $logEntry);
     }
 
-    /**
-     * Establece el archivo de log de errores.
-     * 
-     * @param string $file Ruta del archivo de log de errores
-     */
-    public static function setErrorLogFile($file)
-    {
-        self::$errorLogFile = $file;
-    }
-
-    /**
-     * Escribe un mensaje de log en el archivo general de logs.
-     * 
-     * @param string $message El mensaje que se registrará
-     */
-    public static function logInfo($message)
-    {
-        self::writeLog(self::$logFile, "[INFO] " . self::getTimestamp() . " - " . $message);
-    }
-
-    /**
-     * Escribe un mensaje de advertencia en el archivo de logs de errores.
-     * 
-     * @param string $message El mensaje que se registrará
-     */
-    public static function logWarning($message)
-    {
-        self::writeLog(self::$logFile, "[WARNING] " . self::getTimestamp() . " - " . $message);
-    }
-
-    /**
-     * Escribe un mensaje de error en el archivo de logs de errores.
-     * 
-     * @param string $message El mensaje de error que se registrará
-     */
-    public static function logError($message)
-    {
-        self::writeLog(self::$errorLogFile, "[ERROR] " . self::getTimestamp() . " - " . $message);
-    }
-
-    /**
-     * Escribe el mensaje en el archivo de log especificado.
-     * 
-     * @param string $file El archivo donde se guardará el log
-     * @param string $message El mensaje que se guardará en el archivo
-     * @throws Exception Si no se puede escribir en el archivo
-     */
-    private static function writeLog($file, $message)
+    private static function writeJsonLog($file, $newEntry)
     {
         // Verifica si el directorio existe, si no, lo crea
         if (!file_exists(dirname($file))) {
@@ -72,13 +30,34 @@ class Logger
             }
         }
 
-        // Abre el archivo de log en modo 'append' (agregar al final)
-        $fileHandle = fopen($file, 'a');
+        // Usa 'a+' para abrir el archivo en modo lectura/escritura
+        $fileHandle = fopen($file, 'a+'); // 'a+' permite lectura/escritura y coloca el puntero al final
         if ($fileHandle) {
             // Bloquea el archivo para evitar accesos simultáneos
             if (flock($fileHandle, LOCK_EX)) {
-                fwrite($fileHandle, $message . PHP_EOL);
-                flock($fileHandle, LOCK_UN);  // Libera el bloqueo
+                // Asegúrate de mover el puntero al principio para leer contenido existente
+                rewind($fileHandle);
+
+                // Leer el contenido actual del archivo
+                $existingLogs = [];
+                $fileContents = stream_get_contents($fileHandle);
+                if (!empty($fileContents)) {
+                    $existingLogs = json_decode($fileContents, true);
+                    if (!is_array($existingLogs)) {
+                        $existingLogs = [];
+                    }
+                }
+
+                // Agregar la nueva entrada al historial
+                $existingLogs[] = $newEntry;
+
+                // Reescribir el archivo con los nuevos datos
+                ftruncate($fileHandle, 0); // Limpia el archivo
+                rewind($fileHandle); // Vuelve al principio
+                fwrite($fileHandle, json_encode($existingLogs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+                // Libera el bloqueo
+                flock($fileHandle, LOCK_UN);
             } else {
                 fclose($fileHandle);
                 throw new Exception("No se pudo bloquear el archivo para escritura: " . $file);
@@ -89,13 +68,6 @@ class Logger
         }
     }
 
-    /**
-     * Devuelve la marca de tiempo actual para los logs.
-     * 
-     * @return string La marca de tiempo en formato Y-m-d H:i:s
-     */
-    private static function getTimestamp()
-    {
-        return date('Y-m-d H:i:s');
-    }
+
+
 }

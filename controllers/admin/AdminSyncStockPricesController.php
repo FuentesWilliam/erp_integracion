@@ -1,22 +1,16 @@
 <?php
 require_once _PS_MODULE_DIR_ . 'erp_integracion/src/services/ProductSyncService.php';
-require_once _PS_MODULE_DIR_ . 'erp_integracion/src/services/CsvExportService.php';
 
-class AdminERPIntegracionSyncController extends ModuleAdminController
+class AdminSyncStockPricesController extends ModuleAdminController
 {
-    private $productSyncService;
-    private $csvExportService;
 
-    public function __construct()
+	public function __construct()
     {
         parent::__construct();
         $this->bootstrap = true;
-
-        // Aquí puedes inicializar las clases si es necesario
         $this->productSyncService = new ProductSyncService();
-        $this->csvExportService = new CsvExportService();
     }
-    
+
     public function initContent()
     {
         parent::initContent();
@@ -26,26 +20,13 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
             $this->module->getPathUri() . 'views/css/back.css'
         );
 
-        // Obtener la acción solicitada y cargar la plantilla correspondiente
-        $action = Tools::getValue('action');
-        switch ($action) {
-            case 'syncInventory':
-                $this->sync_inventory();
-                break;
-            default:
-                $this->setTemplate('error.tpl');
-                break;
-        }
-    }
-
-    public function sync_inventory(){
         // Generar URLs para cada acción de sincronización
         $mainUrl     = $this->context->link->getAdminLink('AdminModules') . '&configure=erp_integracion';
-        $syncUrl     = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=sync';
-        $getAll      = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=getAll';
-        $updateStock = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updateStock';
-        $updatePrice = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=updatePrice';
-        $notFound    = $this->context->link->getAdminLink('AdminERPIntegracionSync') . '&ajax=1&action=notFound';
+        $syncUrl     = $this->context->link->getAdminLink('AdminSyncStockPrices') . '&ajax=1&action=sync';
+        $getAll      = $this->context->link->getAdminLink('AdminSyncStockPrices') . '&ajax=1&action=getAll';
+        $updateStock = $this->context->link->getAdminLink('AdminSyncStockPrices') . '&ajax=1&action=updateStock';
+        $updatePrice = $this->context->link->getAdminLink('AdminSyncStockPrices') . '&ajax=1&action=updatePrice';
+        $notFound    = $this->context->link->getAdminLink('AdminSyncStockPrices') . '&ajax=1&action=notFound';
 
 
         // Cargar el JS específico para esta página
@@ -63,7 +44,6 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
         ]);
 
         $this->setTemplate('sync_all.tpl');
-        
     }
 
     public function ajaxProcessSync()
@@ -80,6 +60,9 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
 
     public function ajaxProcessGetAll()
     {
+        //actualizamos precios
+        $this->productSyncService->compareProductsWithPrestashop();
+
         $page = Tools::getValue('page', 1);
         $itemsPerPage = Tools::getValue('itemsPerPage', 100);
 
@@ -120,7 +103,7 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
     public function ajaxProcessUpdateStock()
     {
         // Leer el archivo JSON de productos
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/found.json';
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json';
         if (!file_exists($jsonFile)) {
             die(json_encode(['status' => 'error', 'message' => 'El archivo de datos no existe.']));
         }
@@ -157,14 +140,10 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
                 $errorCount++;
             }
         }
-
-        // Llamamos a la función que actualizará el archivo JSON con los datos modificados
-        $syncService = new SyncService();
-        $syncService->addPrestashopData();
-        
+    
         // Respuesta JSON
         die(json_encode([
-            'status' => 'success',
+            'status' => true,
             'updated' => $updatedCount,
             'errors' => $errorCount,
         ]));
@@ -173,7 +152,7 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
     public function ajaxProcessUpdatePrice()
     {
         // Leer el archivo JSON de productos
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/found.json';
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/src/cache/found.json';
         if (!file_exists($jsonFile)) {
             die(json_encode(['status' => 'error', 'message' => 'El archivo de datos no existe.']));
         }
@@ -212,14 +191,10 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
                 $errorCount++;
             }
         }
-
-        // Llamamos a la función que actualizará el archivo JSON con los datos modificados
-        $syncService = new SyncService();
-        $syncService->addPrestashopData();
         
         // Respuesta JSON
         die(json_encode([
-            'status' => 'success',
+            'status' => true,
             'updated' => $updatedCount,
             'errors' => $errorCount,
         ]));
@@ -227,16 +202,38 @@ class AdminERPIntegracionSyncController extends ModuleAdminController
 
     public function ajaxProcessNotFound()
     {
-        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/cache/stock.json';
+        // Leer el archivo JSON de productos
+        $jsonFile = _PS_MODULE_DIR_ . 'erp_integracion/src/cache/notFound.json';
         if (!file_exists($jsonFile)) {
-            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos de stock no existe.']));
+            die(json_encode(['status' => 'error', 'message' => 'El archivo de datos no existe.']));
         }
 
         $stockData = json_decode(file_get_contents($jsonFile), true);
-        $csvFile = $this->csvExportService->exportNotFoundProducts($stockData);
 
-        $this->csvExportService->downloadCsv($csvFile);
+        // Definir el nombre y la ruta del archivo CSV temporal
+        $csvFile = tempnam(sys_get_temp_dir(), 'no_encontrados_') . '.csv';
+
+        // Crear el archivo CSV y agregar encabezados
+        $fileHandle = fopen($csvFile, 'w');
+        fputcsv($fileHandle, ['Referencia']); // Cambia los encabezados según tus campos
+
+        // Añadir datos de productos no encontrados al CSV
+        foreach ($stockData as $product) {
+            fputcsv($fileHandle, [
+                $product['reference']
+            ]);
+        }
+
+        fclose($fileHandle);
+
+        // Configuración de la descarga del archivo
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="productos_no_encontrados.csv"');
+        header('Content-Length: ' . filesize($csvFile));
+
+        // Enviar el archivo al navegador y luego eliminarlo del servidor
+        readfile($csvFile);
+        unlink($csvFile);
+        exit;
     }
-
 }
-

@@ -1,7 +1,7 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
+// error_reporting(E_ALL);
+// ini_set('display_errors', '1');
+// ini_set('display_startup_errors', '1');
 
 // Asegúrate de verificar si no está ya definido
 if (!defined('_PS_VERSION_')) {
@@ -33,7 +33,6 @@ class ClientSyncService extends ErpSyncBase
         }
     }
 
-
     private function sendClientDataToErp($customerData)
     {
         $endpointName = 'insertaCliente';
@@ -50,19 +49,18 @@ class ClientSyncService extends ErpSyncBase
             throw new Exception("Error al procesar los datos del ERP.");
         }
 
-        if (strpos((string)$xml->Mensaje, "ingresada") !== false || 
-            strpos((string)$xml->Mensaje, "modificado") !== false) {
-            $status = true; // Operación exitosa
-
-        } else {
-            $status = false; // Operación fallida
-
-        }
-
         // Registrar log
-        Logger::logInfo("Respuesta del ERP: " . print_r($response, true));
+        Logger::logInfo("Respuesta del ERP: " . print_r($xml, true));
 
-        return $status;
+        // if (strpos((string)$xml->Mensaje, "ingresada") !== false || 
+        //     strpos((string)$xml->Mensaje, "modificado") !== false) {
+        //     $status = true; // Operación exitosa
+
+        // } else {
+        //     $status = false; // Operación fallida
+        // }
+
+        return true;
     }
 
     private function saveJsonToFile($filePath, $data)

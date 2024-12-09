@@ -24,7 +24,8 @@
 *  International Registered Trademark & Property of PrestaShop SA
 */
 
-require_once 'src/services/ClientSyncService.php';
+//require_once __DIR__ . '/src/services/ClientSyncService.php';
+//require_once __DIR__ . '/src/utils/Logger.php';
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -55,24 +56,103 @@ class ERP_integracion extends Module
 
     public function install()
     {
-        // Configuración inicial durante la instalación
-        Configuration::updateValue('ERP_RUT', '');
-        Configuration::updateValue('ERP_TOKEN', '');
-        Configuration::updateValue('ERP_ENDPOINT_COMPRAS', '');
-        Configuration::updateValue('ERP_ENDPOINT_VENTAS', '');
 
-        return parent::install() &&
-            $this->registerHook('actionCustomerAccountAdd') &&
-            $this->registerHook('actionObjectAddressAddAfter');
+        if (!parent::install()) {
+            return false;
+        }
+
+        // Configuración inicial durante la instalación
+        $configOk = Configuration::updateValue('ERP_RUT', '') &&
+                    Configuration::updateValue('ERP_TOKEN', '') &&
+                    Configuration::updateValue('ERP_ENDPOINT_COMPRAS', '') &&
+                    Configuration::updateValue('ERP_ENDPOINT_VENTAS', '');
+        
+        if (!$configOk) {
+            return false;
+        }
+
+        // Obtener el ID del tab padre "Improve" (Mejoras)
+        $parentId = Tab::getIdFromClassName('IMPROVE');
+        if (!$this->installTab('AdminSyncStockPrices', 'ERP Manager', $parentId)) {
+            return false;
+        }
+
+        // Crear los tabs hijos bajo "ERP Manager"
+        $erpTabId = Tab::getIdFromClassName('AdminSyncStockPrices');
+        $tabsOk = $this->installTab($this->name, 'Configuración del manager', $erpTabId) &&
+                  $this->installTab('AdminSyncStockPrices', 'Sincronización Stock y Precios', $erpTabId) &&
+                  $this->installTab('AdminLogsClientes', 'Logs Clientes', $erpTabId) &&
+                  $this->installTab('AdminLogsFacturas', 'Logs Facturas', $erpTabId) &&
+                  $this->installTab('AdminLogError', 'Log Error', $erpTabId);
+
+        if (!$tabsOk) {
+            return false;
+        }
+
+        // Registrar hooks
+        $hooksOk = $this->registerHook('actionCustomerAccountAdd') &&
+                   $this->registerHook('actionObjectAddressAddAfter');
+        if (!$hooksOk) {
+            return false;
+        }
+
+        return true;
     }
 
     public function uninstall()
     {
-        Configuration::deleteByName('ERP_RUT');
-        Configuration::deleteByName('ERP_TOKEN');
-        Configuration::deleteByName('ERP_ENDPOINT_COMPRAS');
-        Configuration::deleteByName('ERP_ENDPOINT_VENTAS');
+        // Eliminar configuraciones
+        $configsDeleted = Configuration::deleteByName('ERP_RUT') &&
+                          Configuration::deleteByName('ERP_TOKEN') &&
+                          Configuration::deleteByName('ERP_ENDPOINT_COMPRAS') &&
+                          Configuration::deleteByName('ERP_ENDPOINT_VENTAS');
+
+        if (!$configsDeleted) {
+            return false;
+        }
+
+        // Eliminar tabs hijos primero
+        $tabsDeleted = $this->uninstallTab('AdminSyncStockPrices') &&
+                       $this->uninstallTab('AdminLogsClientes') &&
+                       $this->uninstallTab('AdminLogsFacturas') &&
+                       $this->uninstallTab('AdminLogError') &&
+                       $this->uninstallTab('AdminErpManager') &&
+                       $this->uninstallTab($this->name); // Tab principal del módulo
+
+        if (!$tabsDeleted) {
+            return false;
+        }
+
         return parent::uninstall();
+    }
+
+    public function installTab($className, $tabName, $parentId = 0)
+    {
+        $tab = new Tab();
+        $tab->active = 1;
+        $tab->class_name = $className; // Si no es controlador, dejar class_name vacío
+        $tab->name = array();
+
+        // Añadir traducciones para cada idioma instalado
+        foreach (Language::getLanguages(true) as $lang) {
+            $tab->name[$lang['id_lang']] = $tabName;
+        }
+
+        $tab->id_parent = (int)$parentId;
+        $tab->module = $this->name;
+
+        // Guardar el tab en la base de datos
+        return $tab->add();
+    }
+
+    public function uninstallTab($className)
+    {
+        $idTab = Tab::getIdFromClassName($className);
+        if ($idTab) {
+            $tab = new Tab($idTab);
+            return $tab->delete();
+        }
+        return true; // Si no encuentra el tab, devuelve true para evitar errores
     }
 
     /**
@@ -84,26 +164,60 @@ class ERP_integracion extends Module
             $this->postProcess();
         }
 
-       // Cargar los valores actuales de configuración para asignarlos a Smarty
-        $fields_value = $this->getConfigFormValues();
-
-        // Generar URLs para cada acción del controlador AdminSync
-        $syncInventoryUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncInventory';
-        $syncSalesUrl = $this->context->link->getAdminLink('AdminERPIntegracionSync', true) . '&action=syncSales';
+        // Cargar los valores actuales de configuración para asignarlos a Smarty
+        $fields_value = array(
+            'form' => array(
+                'legend' => array(
+                'title' => $this->l('Configuración del ERP Manager'),
+                'icon' => 'icon-cogs',
+                ),
+                'input' => array(
+                    array(
+                        'col' => 3,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-user"></i>',
+                        'desc' => $this->l('Introduzca un RUT válido'),
+                        'name' => 'ERP_RUT',
+                        'label' => $this->l('Rut Empresa'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-key"></i>',
+                        'desc' => $this->l('Introduzca un token válido'),
+                        'name' => 'ERP_TOKEN',
+                        'label' => $this->l('Token'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-link"></i>',
+                        'desc' => $this->l('Introduzca una URL válida'),
+                        'name' => 'ERP_ENDPOINT_COMPRAS',
+                        'label' => $this->l('ERP'),
+                    ),
+                    array(
+                        'col' => 6,
+                        'type' => 'text',
+                        'prefix' => '<i class="icon icon-link"></i>',
+                        'desc' => $this->l('Introduzca una URL válida'),
+                        'name' => 'ERP_ENDPOINT_VENTAS',
+                        'label' => $this->l('ERP VENTAS'),
+                    ),
+                ),
+                'submit' => array(
+                    'title' => $this->l('Guardar'),
+                ),
+            ),
+        );
 
         // Asignar URLs y otros valores a Smarty
         $this->context->smarty->assign([
             'module' => $this,
-            'fields_value', $fields_value,
-            'sync_inventory_url' => $syncInventoryUrl,
-            'sync_sales_url' => $syncSalesUrl,
+            'fields_value' => $fields_value
         ]);
 
-        // Cargar la plantilla de navegación
-        $navigation = $this->context->smarty->fetch(
-            $this->local_path . 'views/templates/admin/navigation.tpl');
-
-        return $navigation . $this->renderForm();
+        return $this->renderForm();
     }
 
     /**
@@ -228,59 +342,80 @@ class ERP_integracion extends Module
         $data = $params['newCustomer'];
         $customerId = $data->id;
         
-        // Cargar datos del cliente utilizando la clase Customer
-        $customer = new Customer($customerId);
+        // Consulta SQL para recuperar el cliente y sus datos personalizados
+        $sql = 'SELECT * FROM ' . _DB_PREFIX_ . 'customer WHERE id_customer = ' . (int)$customerId;
+        $customer = Db::getInstance()->getRow($sql);
 
-        if (Validate::isLoadedObject($customer)) {
-            $clientData = [
-                'rut' => $customer['rut'],
-                'firstname' => $customer['firstname'],
-                'lastname' => $customer['lastname'],
-                'email' => $customer['email'],
-                'phone' => $customer['phone'],
-                'giro' => $customer['company_business_activity']
-            ];
-            
-            // Sincronizar con el ERP
-            try {
-                $syncService = new ClientSyncService();
-                $result = $syncService->addClient($clientData);
+        $clientData = [
+            'rut' => $customer['rut'],
+            'nombre' => $customer['firstname'] .' '. $customer['lastname'],
+            'email' => $customer['email'],
+            'phone' => $customer['phone'],
+            'giro' => $customer['company_business_activity'],
+            'dir' => '',
+            'comuna' => '',
+            'ciudad' => '',
+            'dirDespacho' => '',
+            'comunaDespacho' => '',
+            'ciudadDespacho' => '',
+            'fono' => ''
+        ];
+        
+        // Sincronizar con el ERP
+        try {
+            $syncService = new ClientSyncService();
+            $result = $syncService->addClient($clientData);
 
-                if (!$result) {
-                    Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
-                }
-            } catch (Exception $e) {
-                Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
+            if (!$result) {
+                Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
             }
-        } else {
-            Logger::logError("Error al cargar cliente ID: $customerId.");
+
+        } catch (Exception $e) {
+            Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
         }
+
     }
 
     public function hookActionObjectAddressAddAfter($params)
     {
-        // $address = $params['object']; // Dirección recién agregada
-        // $customer = new Customer($address->id_customer);
+        // $data = $params['object']; // Dirección recién agregada
+        // $customerId = $data->id;
 
-        // // Preparar datos para el ERP
-        // $customerData = [
-        //     'rut' => $customer->rut, // Asegúrate de asignar un campo RUT aquí.
-        //     'firstname' => $customer->firstname,
-        //     'lastname' => $customer->lastname,
-        //     'address' => $address->address1,
-        //     'comuna' => $address->postcode,
-        //     'city' => $address->city,
-        //     'address_delivery' => $address->address1, // Igual que address en este caso.
-        //     'comuna_delivery' => $address->postcode,
-        //     'city_delivery' => $address->city,
-        //     'email' => $customer->email,
-        //     'phone' => $customer->phone,
-        //     'giro' => $customer->company_business_activity
+        // // Consulta SQL para recuperar el cliente y sus datos personalizados
+        // $sql = 'SELECT c.id_customer, c.rut, c.firstname AS nombre, c.lastname  AS apellido, c.email, c.phone AS telefono, c.company_business_activity as giro,
+        // a.address1 as dir, a.city as comuna
+        // FROM ' . _DB_PREFIX_ . 'customer c
+        // INNER JOIN '. _DB_PREFIX_ .'address a ON c.id_customer = a.id_customer
+        // WHERE a.id_address = ' . (int)$customerId;
+        // $customer = Db::getInstance()->getRow($sql);
+
+        // $clientData = [
+        //     'rut' => $customer['rut'],
+        //     'nombre' => $customer['nombre'] .' '. $customer['apellido'],
+        //     'email' => $customer['email'],
+        //     'phone' => $customer['telefono'],
+        //     'giro' => $customer['giro'],
+        //     'dir' => $customer['dir'],
+        //     'comuna' => $customer['comuna'],
+        //     'ciudad' => '',
+        //     'dirDespacho' => $customer['dir'],
+        //     'comunaDespacho' => $customer['comuna'],
+        //     'ciudadDespacho' => '',
+        //     'fono' => ''
         // ];
 
-        // // Instancia de SyncService y envío de datos
-        // $syncService = new SyncService();
-        // $syncService->addClient($customerData);
+        // // Sincronizar con el ERP
+        // try {
+        //     $syncService = new ClientSyncService();
+        //     $result = $syncService->addClient($clientData);
+
+        //     if (!$result) {
+        //         Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
+        //     }
+
+        // } catch (Exception $e) {
+        //     Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
+        // }
     }
 
 }
