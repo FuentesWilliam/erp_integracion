@@ -1,0 +1,19 @@
+.logs-container {
+    padding: 20px;
+}
+.logs-container table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+.logs-container th, .logs-container td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: left;
+}
+.logs-container th {
+    background-color: #f4f4f4;
+}
+.logs-container tr:nth-child(even) {
+    background-color: #f9f9f9;
+}

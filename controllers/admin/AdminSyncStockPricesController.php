@@ -36,7 +36,9 @@ class AdminSyncStockPricesController extends ModuleAdminController
             'stock_url'      => $updateStock,
             'price_url'      => $updatePrice
         ]);
-        $this->context->controller->addJS($this->module->getPathUri() . 'views/js/all.js');
+        $this->context->controller->addJS(
+            $this->module->getPathUri() . 'views/js/all.js'
+        );
 
         $this->context->smarty->assign([
             'main_menu_url' => $mainUrl,

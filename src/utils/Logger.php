@@ -68,6 +68,15 @@ class Logger
         }
     }
 
+    public static function getLogs($date = null)
+    {
+        $date = $date ?: date('Y-m-d'); // Por defecto, la fecha actual
+        $logFilePath = _PS_MODULE_DIR_ . "erp_integracion/src/logs/sync_log_{$date}.json";
 
+        if (file_exists($logFilePath)) {
+            return json_decode(file_get_contents($logFilePath), true) ?: [];
+        }
 
+        return []; // Devuelve un array vacío si no hay logs para la fecha
+    }
 }

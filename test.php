@@ -9,13 +9,27 @@ require_once 'src/services/InvoiceSyncService.php';
 require_once 'src/services/ClientSyncService.php';
 
 // Datos de prueba para la factura
+$testCustomerData = [
+    'rut' => '3.513.113-2',
+    'nombre' => 'test2',
+    'dir' => 'cerca',
+    'comuna' => 'providencia',
+    'ciudad' => '',
+    'dirDespacho' => '',
+    'comunaDespacho' => '',
+    'ciudadDespacho' => '',
+    'email' => '',
+    'fono' => '',
+    'giro' => '',
+];
+
 $testInvoiceData = [
-    'numDocumento' => '120',
-    'fecha' => '2024/12/01',
-    'fechaVencimiento' => '2024/12/02',
-    'rutFactA' => '92379000-4',
+    'numDocumento' => '597854',
+    'fecha' => '19-12-2024',
+    'fechaVencimiento' => '20-12-2024',
+    'rutFactA' => '91647547-0',
     'glosaPago' => '',
-    'rutCliente' => '92379000-4',
+    'rutCliente' => '91647547-0',
     'codigoMoneda' => '$',
     'codigoComisionista' => '',
     'comision' => '0',
@@ -49,34 +63,37 @@ $testInvoiceData = [
     'codelcoFechaHes' => '2024/12/01',
     'codelcoGDNum' => '0',
     'codelcoFechaGdve' => '2024/12/01',
-    'codigoPersonal' => 'MME',
+    'codigoPersonal' => 'KRQ',
 ];
 
-$testCustomerData = [
-    'rut' => '66666666-6',
-    'nombre' => '',
-    'dir' => '',
-    'comuna' => '',
-    'ciudad' => '',
-    'dirDespacho' => '',
-    'comunaDespacho' => '',
-    'ciudadDespacho' => '',
-    'email' => '',
-    'fono' => '',
-    'giro' => '',
+$testInvoiceData2 = [
+    'numDocumento'=>'597854',
+    'fecha'=>'19-12-2024',
+    'codigoProducto'=>'961280130146',
+    'cantidad'=>'1',
+    'descuento'=>'0',
+    'numLote'=>'0',
+    'codigoBodega'=>'B01',
+    'codigoCtaCble'=>'110501',
+    'numSerie'=>'0',
+    'codigoCentroCosto'=>'0',
+    'numItemRef'=>'0',
+    'codigoPersonal'=>'KRQ',
 ];
+
 
 // Llamar a la función
 $syncService = new InvoiceSyncService();
-$result = $syncService->addInvoice($testInvoiceData);
+//$result = $syncService->addInvoice($testInvoiceData);
 
 //$syncService = new ClientSyncService();
 //$result = $syncService->addClient($testCustomerData);
 
+//$result = $syncService->addInvoiceDescontarStock($testInvoiceData2);
 
 echo "<pre> ";
 echo "--> data: ";
-//var_dump($testCustomerData);
+var_dump($testInvoiceData2);
 var_dump($result);
 echo "</pre>";
 

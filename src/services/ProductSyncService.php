@@ -2,6 +2,7 @@
 // error_reporting(E_ALL);
 // ini_set('display_errors', '1');
 // ini_set('display_startup_errors', '1');
+
 ini_set('memory_limit', '1024M');
 ini_set('max_execution_time', 600); // 10 minutos
 
@@ -24,7 +25,7 @@ class ProductSyncService extends ErpSyncBase
      */
     public function syncStockAndPrices()
     {
-        Logger::logSync("Iniciando sincronización de productos...", "pending", null);
+        //Logger::logSync("Iniciando sincronización de productos...", "pending", null);
 
         $endpointName = "consultaInfoProductos";
         $addParams = "codProd=";
@@ -36,7 +37,7 @@ class ProductSyncService extends ErpSyncBase
             // Procesar los datos recibidos
             $this->processProductData($data);
 
-            Logger::logSync("productos sincronizado correctamente", "success", null);
+            //Logger::logSync("productos sincronizado correctamente", "success", null);
             return true;
 
         } catch (Exception $e) {

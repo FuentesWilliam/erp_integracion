@@ -1,38 +1,47 @@
-<div class="panel">
-    <h3>Logs de Sincronización</h3>
+<div class="logs-container">
+    <h2>Fecha logs: {$date}</h2>
 
-    <form method="get">
-        <input type="hidden" name="controller" value="AdminLogs">
-        <input type="hidden" name="token" value="{$token}">
+    <!-- Formulario para seleccionar la fecha -->
+    <form action="{$current_url}" method="post">
         <label for="log_date">Seleccionar fecha:</label>
-        <input type="date" name="log_date" id="log_date" value="{$date}">
-        <button type="submit" class="btn btn-primary">Mostrar Logs</button>
+        <input type="date" name="log_date" value="{$date}" />
+        <button type="submit" class="btn btn-primary">{l s='Mostrar Logs'}</button>
     </form>
 
-    {if $logs|count > 0}
-        <table class="table">
-            <thead>
+
+    <!-- Tabla para mostrar los logs -->
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Fecha y hora</th>
+                <th>Estado</th>
+                <th>Acción</th>
+                <th>Detalles</th>
+            </tr>
+        </thead>
+        <tbody>
+            {foreach from=$logs.data item=log}
                 <tr>
-                    <th>Fecha/Hora</th>
-                    <th>Mensaje</th>
-                    <th>Estado</th>
-                    <th>ID</th>
-                    <th>Contexto</th>
+                    <td>{$log.timestamp}</td>
+                    <td>
+                        {if $log.status == 'success'}
+                            <span class="label label-success">Éxito</span>
+                        {elseif $log.status == 'failure'}
+                            <span class="label label-danger">Fallo</span>
+                        {else}
+                            <span class="label label-warning">Pendiente</span>
+                        {/if}
+                    </td>
+                    <td>{$log.message}</td>
+                    <td>{$log.context}</td>
                 </tr>
-            </thead>
-            <tbody>
-                {foreach from=$logs item=log}
-                    <tr>
-                        <td>{$log.timestamp}</td>
-                        <td>{$log.message}</td>
-                        <td>{$log.status}</td>
-                        <td>{$log.id}</td>
-                        <td>{$log.context}</td>
-                    </tr>
-                {/foreach}
-            </tbody>
-        </table>
-    {else}
+            {/foreach}
+        </tbody>
+    </table>
+
+    <!-- Mensaje si no hay logs -->
+    {if !$logs.data}
         <p>No se encontraron logs para la fecha seleccionada.</p>
     {/if}
 </div>
+

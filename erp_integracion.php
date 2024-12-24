@@ -23,9 +23,14 @@
 *  @license   http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
 *  International Registered Trademark & Property of PrestaShop SA
 */
+// error_reporting(E_ALL);
+// ini_set('display_errors', '1');
+// ini_set('display_startup_errors', '1');
 
-//require_once __DIR__ . '/src/services/ClientSyncService.php';
-//require_once __DIR__ . '/src/utils/Logger.php';
+
+require_once __DIR__ . '/src/utils/Logger.php';
+require_once __DIR__ . '/src/services/ClientSyncService.php';
+require_once __DIR__ . '/src/services/InvoiceSyncService.php';
 
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -82,8 +87,7 @@ class ERP_integracion extends Module
         $tabsOk = $this->installTab($this->name, 'Configuración del manager', $erpTabId) &&
                   $this->installTab('AdminSyncStockPrices', 'Sincronización Stock y Precios', $erpTabId) &&
                   $this->installTab('AdminLogsClientes', 'Logs Clientes', $erpTabId) &&
-                  $this->installTab('AdminLogsFacturas', 'Logs Facturas', $erpTabId) &&
-                  $this->installTab('AdminLogError', 'Log Error', $erpTabId);
+                  $this->installTab('AdminLogsFacturas', 'Logs Facturas', $erpTabId);
 
         if (!$tabsOk) {
             return false;
@@ -91,7 +95,9 @@ class ERP_integracion extends Module
 
         // Registrar hooks
         $hooksOk = $this->registerHook('actionCustomerAccountAdd') &&
-                   $this->registerHook('actionObjectAddressAddAfter');
+                   $this->registerHook('actionObjectAddressAddAfter') &&
+                   $this->registerHook('actionValidateOrder') &&
+                   $this->registerHook('actionOrderStatusUpdate');
         if (!$hooksOk) {
             return false;
         }
@@ -362,60 +368,253 @@ class ERP_integracion extends Module
         ];
         
         // Sincronizar con el ERP
-        try {
-            $syncService = new ClientSyncService();
-            $result = $syncService->addClient($clientData);
+        $syncService = new ClientSyncService();
+        $syncService->addClient($clientData);
+    }
 
-            if (!$result) {
-                Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
+    #/modules/erp_integracion/erp_integracion.php
+    public function hookActionObjectAddressAddAfter($params)
+    {
+        $data = $params['object']; // Dirección recién agregada
+        $customerId = $data->id;
+
+        // Consulta SQL para recuperar el cliente y sus datos personalizados
+        $sql = 'SELECT c.id_customer, c.rut, c.firstname AS nombre, c.lastname  AS apellido, c.email, c.phone AS telefono, c.company_business_activity as giro,
+        a.address1 as dir, a.city as comuna
+        FROM ' . _DB_PREFIX_ . 'customer c
+        INNER JOIN '. _DB_PREFIX_ .'address a ON c.id_customer = a.id_customer
+        WHERE a.id_address = ' . (int)$customerId;
+        $customer = Db::getInstance()->getRow($sql);
+
+        $clientData = [
+            'rut' => $customer['rut'],
+            'nombre' => $customer['nombre'] .' '. $customer['apellido'],
+            'email' => $customer['email'],
+            'phone' => $customer['telefono'],
+            'giro' => $customer['giro'],
+            'dir' => $customer['dir'],
+            'comuna' => $customer['comuna'],
+            'ciudad' => '',
+            'dirDespacho' => $customer['dir'],
+            'comunaDespacho' => $customer['comuna'],
+            'ciudadDespacho' => '',
+            'fono' => ''
+        ];
+
+        // Sincronizar con el ERP
+        $syncService = new ClientSyncService();
+        $result = $syncService->addClient($clientData);
+    }
+
+    /**
+     * Hook para validar y procesar la orden al momento de su creación.
+     *
+     * @param array $params Parámetros del hook, contiene la orden creada.
+     * @return void
+     */
+    public function hookActionValidateOrder($params)
+    {
+        // Verificar si hay datos válidos en $params
+        if (!isset($params['order'])) {
+            Logger::logSync("Datos de pedido incompletos: ", "failure");
+            return;
+        }
+
+        // Obtener la orden
+        $orderId = $params['order']->id;
+        $order = new Order($orderId);
+
+        // Verifica si la orden es válida
+        if (!Validate::isLoadedObject($order)) {
+            Logger::logSync("Error al cargar el pedido con ID {$orderId}.", "failure");
+            return;
+        }
+
+        // Intentar enviar la factura al ERP
+        try {
+            // Carga la información del pedido
+            $invoiceData = $this->prepareInvoiceData($order);
+
+            // Verifica que los datos de la factura sean válidos
+            if (empty($invoiceData)) {
+                Logger::logSync("Error al preparar datos de factura para el pedido {$order->id}.", "failure");
+                return;
+            }
+            // Envía la factura al ERP
+            $invoiceService = new InvoiceSyncService();
+            $result = $invoiceService->addInvoice($invoiceData);
+
+            if ($result) {
+                // Guardar el erp_id en la tabla ps_orders
+                $order->erp_id = $result;
+                $order->update();
             }
 
         } catch (Exception $e) {
-            Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
+            Logger::logSync(
+                "Excepción al enviar factura del pedido {$order->id} al ERP. ",
+                "failure", $e->getMessage()
+            );
         }
-
     }
 
-    public function hookActionObjectAddressAddAfter($params)
+    /**
+     * Hook para procesar la actualización del estado de un pedido.
+     *
+     * @param array $params Parámetros del hook, incluye el nuevo estado y la orden.
+     * @return void
+     */
+    public function hookActionOrderStatusUpdate($params)
     {
-        // $data = $params['object']; // Dirección recién agregada
-        // $customerId = $data->id;
+        $newOrderStatus = $params['newOrderStatus'];
+        $order = new Order($params['id_order']);
 
-        // // Consulta SQL para recuperar el cliente y sus datos personalizados
-        // $sql = 'SELECT c.id_customer, c.rut, c.firstname AS nombre, c.lastname  AS apellido, c.email, c.phone AS telefono, c.company_business_activity as giro,
-        // a.address1 as dir, a.city as comuna
-        // FROM ' . _DB_PREFIX_ . 'customer c
-        // INNER JOIN '. _DB_PREFIX_ .'address a ON c.id_customer = a.id_customer
-        // WHERE a.id_address = ' . (int)$customerId;
-        // $customer = Db::getInstance()->getRow($sql);
+        // Verifica si el estado es "Pago aceptado"
+        if ($newOrderStatus->id != Configuration::get('PS_OS_PAYMENT')) {
+            return;
+        }
 
-        // $clientData = [
-        //     'rut' => $customer['rut'],
-        //     'nombre' => $customer['nombre'] .' '. $customer['apellido'],
-        //     'email' => $customer['email'],
-        //     'phone' => $customer['telefono'],
-        //     'giro' => $customer['giro'],
-        //     'dir' => $customer['dir'],
-        //     'comuna' => $customer['comuna'],
-        //     'ciudad' => '',
-        //     'dirDespacho' => $customer['dir'],
-        //     'comunaDespacho' => $customer['comuna'],
-        //     'ciudadDespacho' => '',
-        //     'fono' => ''
-        // ];
+        // Intentar enviar la factura al ERP
+        try {
+            // Carga la información del pedido
+            $invoiceDetails = $this->prepareInvoiceDetails($order);
 
-        // // Sincronizar con el ERP
-        // try {
-        //     $syncService = new ClientSyncService();
-        //     $result = $syncService->addClient($clientData);
+            // Verifica que los datos de la factura sean válidos
+            if (empty($invoiceDetails)) {
+                Logger::logSync("Error al preparar datos de factura para el pedido {$order->id}.", "failure");
+                return;
+            }
 
-        //     if (!$result) {
-        //         Logger::logError("Error al sincronizar cliente ID: $customerId. Respuesta del ERP: Falló la sincronización.");
-        //     }
+            Logger::logSync("debug", "success", [$invoiceDetails]);
 
-        // } catch (Exception $e) {
-        //     Logger::logError("Excepción al sincronizar cliente ID: $customerId. Detalles: " . $e->getMessage());
-        // }
+            // Envía la factura al ERP
+            $invoiceService = new InvoiceSyncService();
+            $result = $invoiceService->addInvoiceDetails($invoiceDetails, $order->reference);
+
+        } catch (Exception $e) {
+            Logger::logSync("Excepción al enviar factura del pedido {$order->id} al ERP: " . $e->getMessage(), "failure");
+        }
+    }
+
+    /**
+     * Prepara los datos generales de la factura para enviar al ERP.
+     *
+     * @param Order $order Objeto de pedido.
+     * @return array Datos preparados para el ERP.
+     */
+    private function prepareInvoiceData($order)
+    {
+        $customerId = (int)$order->id_customer;
+        $sqlCustomer = 'SELECT * FROM ' . _DB_PREFIX_ . 'customer WHERE id_customer = ' . $customerId;
+        $customer = Db::getInstance()->getRow($sqlCustomer);
+
+        if (empty($customer) || !isset($customer['rut'])) {
+            $this->log("Cliente no válido para el pedido {$order->id}.", "failure");
+            return [];
+        }
+
+        $fecha = (new DateTime($order->date_add))->format('d-m-Y');
+        $fechaV = (new DateTime($order->date_add))->modify('+1 day')->format('d-m-Y');
+
+        return [
+            'numDocumento' => $order->id,
+            'fecha' => $fecha,
+            'fechaVencimiento' => $fechaV,
+            'rutFactA' => $customer['rut'],
+            'glosaPago' => '',
+            'rutCliente' => $customer['rut'],
+            'codigoMoneda' => '$',
+            'codigoComisionista' => '',
+            'comision' => '0',
+            'codigoVendedor' => '',
+            'tipoVenta' => '0',
+            'numeroGuia' => '0',
+            'numeroOc' => $order->reference,
+            'descuentoTipo' => '0',
+            'descuento' => '0',
+            'codigoSucursal' => '1',
+            'tipoDespacho' => '0',
+            'emitePacking' => '0',
+            'rebajaStock' => '1',
+            'proforma' => '0',
+            'nula' => '0',
+            'esElectronica' => '1',
+            'formaPago' => 'Efectivo',
+            'atencionA' => '',
+            'codigoCtaCble' => '110501',
+            'codigoCentroCosto' => '',
+            'glosaContable' => '',
+            'numOt' => '0',
+            'procesoNum' => '0',
+            'numCaja' => '0',
+            'turno' => '0',
+            'obra' => '',
+            'observaciones' => $order->note ?? '',
+            'codelcoOcNum' => '0',
+            'codelcoFechaOc' => date('d-m-Y'),
+            'codelcoHesNum' => '0',
+            'codelcoFechaHes' => date('d-m-Y'),
+            'codelcoGDNum' => '0',
+            'codelcoFechaGdve' => date('d-m-Y'),
+            'codigoPersonal' => 'KRQ',
+        ];
+    }
+
+    /**
+     * Prepara los detalles de la factura, incluyendo productos, para enviar al ERP.
+     *
+     * @param Order $order Objeto de pedido.
+     * @return array Detalles de productos preparados para el ERP.
+     */
+    private function prepareInvoiceDetails($order)
+    {
+        $products = $order->getProducts();
+        $sqlOrder = 'SELECT erp_id, invoice_date AS fecha FROM ' . _DB_PREFIX_ . 'orders WHERE id_order = ' . (int)$order->id;
+        $orderData = Db::getInstance()->getRow($sqlOrder);
+
+        if (empty($orderData) || !isset($orderData['erp_id'])) {
+            Logger::logSync("No se encontró numDocumento para el pedido {$order->id}.", "failure");
+            return [];
+        }
+
+        foreach ($products as $product) {
+            $products = $product['product_reference'];
+            $cantidad = $product['product_quantity'];
+            $descripProducto = $product['product_name'];
+            $precioUnitario = $product['unit_price_tax_incl'];
+        }
+
+        return [
+            'numDocumento' => $orderData['erp_id'],
+            'fecha' => $orderData['fecha'],
+            'descripProcuctoDetallada' => '0',
+            'codigoProducto' => $products,
+            'descripProducto' => $descripProducto,
+            'cantidad' => $cantidad,
+            'descuento' => '0',
+            'numLote' => '0',
+            'codigoBodega' => 'B01',
+            'codigoCtaCble' => '110501',
+            'numSerie' => '0',
+            'codigoCentroCosto' => '0',
+            'numItemRef' => '0',
+            'codigoPersonal' => 'KRQ',
+            'precioUnitario' => $precioUnitario
+        ];
+    }
+
+    private function getPaymentMethod($order)
+    {
+        switch ($order->payment) {
+            case 'Bank Wire':
+                return 'Transferencia';
+            case 'Cash':
+                return 'Efectivo';
+            case 'Credit Card':
+                return 'Tarjeta de Crédito';
+            default:
+                return 'Desconocido';
+        }
     }
 
 }
